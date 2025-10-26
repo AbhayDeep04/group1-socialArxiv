@@ -17,6 +17,12 @@ QDRANT_URL=<qdrant-endpoint>
 QDRANT_API_KEY=<qdrant-api-key>
 ```
 
+Ingest the papers for the demo:
+```bash
+# run from project root
+node scripts/ingest.mjs
+```
+
 Then, run the development server:
 
 ```bash
