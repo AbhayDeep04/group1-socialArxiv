@@ -104,22 +104,29 @@ export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen">
       <header className="sticky top-0 z-10 border-b bg-background px-4 py-2 sm:px-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Social arXiv Demo</h1>
-          <form onSubmit={handleSearch} className="relative ml-auto flex-1 sm:flex-initial max-w-md">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold whitespace-nowrap">Social arXiv Demo</h1>
+          <form onSubmit={handleSearch} className="relative flex-1 max-w-xl">
             <Input
               type="search"
               placeholder="Search papers..."
               className="w-full rounded-lg bg-background pl-8"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={isSearching} // Disable input while searching
+              disabled={isSearching}
             />
             <Button type="submit" size="sm" className="absolute right-0 top-0 h-full rounded-l-none" disabled={isSearching}>
-              {isSearching ? 'Searching...' : 'Search'} {/* Show loading state */}
+              {isSearching ? 'Searching...' : 'Search'}
             </Button>
           </form>
-          {/* Add login/logout/profile button later */}
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <Link href="/login">
+              <Button variant="outline" size="sm">Login</Button>
+            </Link>
+            <Link href="/register">
+              <Button size="sm">Register</Button>
+            </Link>
+          </div>
         </div>
       </header>
 
