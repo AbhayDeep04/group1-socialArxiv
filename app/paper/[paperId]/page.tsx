@@ -51,27 +51,42 @@ export default function PaperPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [isAiResponding, setIsAiResponding] = useState(false);
 
-  // --- Fetch Paper Metadata (Placeholder) ---
+  // --- Fetch Paper Metadata from API ---
   useEffect(() => {
-    // Placeholder: In a real app, fetch title/URL from Typesense/Firestore based on paperId
-    if (paperId) {
-        console.log("Fetching metadata for paper:", paperId);
-        // Simulate fetch based on ID
-        setTimeout(() => {
-            // Construct URL assuming filename matches ID in the public folder
-            const potentialPdfUrl = `/pdfs/${paperId}.pdf`;
-            // TODO: Add a check here if the PDF actually exists, maybe via a HEAD request or API call
-            setMetadata({
-                title: `Title for ${paperId}`, // Replace with actual fetched title
-                pdfUrl: potentialPdfUrl
-            });
-            setIsLoading(false);
-        }, 500); // Simulate network delay
-    } else {
-         setError("Paper ID not found in URL.");
-         setIsLoading(false);
+    async function fetchMetadata() {
+      if (!paperId) {
+        setError("Paper ID not found in URL.");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Fetching metadata for paper:", paperId);
+      
+      try {
+        const response = await fetch(`/api/papers/${paperId}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch metadata: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        setMetadata({
+          title: data.title || `Title for ${paperId}`,
+          pdfUrl: data.pdfUrl || `/pdfs/${paperId}.pdf`
+        });
+      } catch (err: any) {
+        console.error("Error fetching paper metadata:", err);
+        setMetadata({
+          title: `Title for ${paperId}`,
+          pdfUrl: `/pdfs/${paperId}.pdf`
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
 
+    fetchMetadata();
   }, [paperId]); // Re-run if paperId changes
 
   // --- PDF Load Handler ---

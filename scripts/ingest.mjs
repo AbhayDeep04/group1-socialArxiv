@@ -19,6 +19,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 console.log('DEBUG: Typesense Admin Key Loaded:', process.env.TYPESENSE_ADMIN_API_KEY); // Keep debug line
 
 const pdfsFolderPath = path.join(__dirname, '../public/pdfs'); // Path to your PDFs
+const metadataFilePath = path.join(pdfsFolderPath, 'metadata.json'); // Path to metadata file
 const typesenseCollectionName = 'papers';
 const qdrantCollectionName = 'paper_chunks';
 const embeddingModelName = 'Xenova/all-MiniLM-L6-v2'; // A good small & fast model
@@ -168,7 +169,18 @@ async function ingestData() {
     }
     console.log('Embedding model loaded.');
 
-    // 4. Process PDFs
+    // 4. Load metadata from JSON file
+    console.log(`Loading metadata from: ${metadataFilePath}`);
+    let metadataMap = {};
+    try {
+        const metadataContent = await fs.readFile(metadataFilePath, 'utf-8');
+        metadataMap = JSON.parse(metadataContent);
+        console.log(`Loaded metadata for ${Object.keys(metadataMap).length} papers.`);
+    } catch (error) {
+        console.warn('Warning: Could not load metadata.json. Using placeholder data.', error.message);
+    }
+
+    // 5. Process PDFs
     console.log(`Reading PDFs from: ${pdfsFolderPath}`);
     let pdfFiles;
     try {
@@ -194,16 +206,17 @@ async function ingestData() {
         const paperId = path.basename(pdfFile, '.pdf');
         console.log(`\nProcessing: ${pdfFile}...`);
 
-        // --- Basic Metadata (Placeholder) ---
+        // --- Get Metadata from JSON or use placeholders ---
+        const paperMetadata = metadataMap[paperId] || {};
         const metadata = {
             id: paperId,
-            title: `Title for ${paperId}`,
-            abstract: `Abstract for ${paperId}...`,
-            authors: ['Author A', 'Author B'],
-            categories: ['cs.AI', 'cs.LG'],
-            year: 2024,
+            title: paperMetadata.title || `Title for ${paperId}`,
+            abstract: paperMetadata.abstract || `Abstract for ${paperId}...`,
+            authors: paperMetadata.authors || ['Author A', 'Author B'],
+            categories: paperMetadata.categories || ['cs.AI', 'cs.LG'],
+            year: paperMetadata.year || 2024,
             pdfUrl: `/pdfs/${pdfFile}`, // URL relative to public
-            source: 'upload', //
+            source: 'upload',
         };
 
         // 4a. Add metadata to Typesense
