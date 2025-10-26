@@ -2,7 +2,22 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+First, create a `.env.local` file in the project root and add the required environment variables:
+
+```
+# typesense api keys
+NEXT_PUBLIC_TYPESENSE_HOST=<typesense-hostname>
+NEXT_PUBLIC_TYPESENSE_PORT=<typesense-port>
+NEXT_PUBLIC_TYPESENSE_PROTOCOL=<http-or-https>
+NEXT_PUBLIC_TYPESENSE_SEARCH_ONLY_API_KEY=<typesense-search-only-key>
+TYPESENSE_ADMIN_API_KEY=<typesense-admin-key>
+
+# qdrant api keys
+QDRANT_URL=<qdrant-endpoint>
+QDRANT_API_KEY=<qdrant-api-key>
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
