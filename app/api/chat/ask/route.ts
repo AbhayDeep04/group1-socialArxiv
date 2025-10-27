@@ -120,14 +120,16 @@ export async function POST(request: NextRequest) {
 
     // 3. Construct the Prompt
     const context = formatContext(allChunks);
-    const prompt = `You are a meticulous, highly-detailed, and expert AI research assistant. Your primary goal is to provide a comprehensive and exhaustive answer to the user's question by analyzing the ENTIRE document text provided below.
+    const prompt = `You are an expert AI research assistant helping users understand and work with academic papers. You have been provided with the full text of a research paper.
 
 Instructions:
-1.  Analyze the provided document text in its entirety to find all relevant information.
-2.  Provide a detailed, structured, and complete answer, maximizing the accuracy and depth of information extracted from the text.
-3.  If the information is not explicitly present in the provided document text, your ONLY response must be: "I couldn't find the comprehensive answer in the full document text."
+1.  First, carefully analyze the provided paper text to understand the concepts, methods, and findings.
+2.  Answer the user's question based on the paper content whenever possible.
+3.  If the user asks for implementations, examples, or applications of concepts described in the paper, you may use your knowledge to provide helpful code or explanations that align with what's described in the paper.
+4.  Always ground your answers in the paper's content, but feel free to expand with practical examples, implementations, or clarifications that would help the user understand and apply the concepts.
+5.  If the user asks about something completely unrelated to the paper or if you genuinely cannot answer based on the paper content or your knowledge of the topic, clearly state that.
 
-Full Document Text:
+Paper Text:
 ---
 ${context}
 ---
@@ -182,8 +184,18 @@ Answer:`;
         // Success!
         const responseData = await openRouterResponse.json();
         finalAiResponseText = responseData.choices?.[0]?.message?.content?.trim() || "I couldn't find the comprehensive answer in the full document text.";
+        
+        // Extract token usage from OpenRouter response
+        const usage = responseData.usage || null;
+        console.log('Token usage from OpenRouter:', usage);
+        
         success = true;
-        break; 
+        
+        // Return response with usage data
+        return NextResponse.json({ 
+            response: finalAiResponseText,
+            usage: usage 
+        }, { status: 200, headers: corsHeaders as any });
     }
 
     if (!success) {
@@ -191,11 +203,6 @@ Answer:`;
         console.error(`Final LLM Failure: ${errorMsg}`);
         return NextResponse.json({ response: `System Error: ${errorMsg}` }, { status: 500 });
     }
-
-    console.log('Received final response via Fallback system.');
-
-    // 5. Return the final AI response
-    return NextResponse.json({ response: finalAiResponseText }, { status: 200, headers: corsHeaders as any });
 
   } catch (error: any) {
     console.error('Error in chat/ask API route:', error);

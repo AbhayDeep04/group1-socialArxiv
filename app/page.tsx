@@ -1,14 +1,13 @@
-'use client'; // Needed for useState, useEffect, event handlers
+'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import Typesense from 'typesense'; // Keep for initial load if preferred, or remove if search handles all
+import Typesense from 'typesense';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-// Remove Firestore imports if still present
-// import { db } from '@/lib/firebaseConfig';
-// import { collection, getDocs, query, limit } from "firebase/firestore";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ChevronDown, ChevronRight, RotateCcw, Minus } from "lucide-react";
 
 // --- Typesense Client Initialization (Can optionally be removed if initial load uses API) ---
 // Keep this only if you want the initial load separate from search API
@@ -41,36 +40,39 @@ interface PaperHit { // Needed if using client-side Typesense directly
 
 export default function HomePage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [papers, setPapers] = useState<PaperDocument[]>([]); // State to hold papers
-  const [isLoading, setIsLoading] = useState(true); // Loading state
-  const [error, setError] = useState<string | null>(null); // Error state
-  const [isSearching, setIsSearching] = useState(false); // State for search loading
+  const [papers, setPapers] = useState<PaperDocument[]>([]);
+  const [allPapers, setAllPapers] = useState<PaperDocument[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(true);
+  const [expandedPaperId, setExpandedPaperId] = useState<string | null>(null);
 
 
-  // --- Function to Fetch Papers (Used for Initial Load and Search) ---
-  const fetchPapers = async (query = '*') => { // Default to '*' for initial load
-      setIsLoading(query === '*'); // Only show initial loading spinner
-      setIsSearching(query !== '*'); // Show searching indicator
+  const fetchPapers = async (query = '*') => {
+      setIsLoading(query === '*');
+      setIsSearching(query !== '*');
       setError(null);
       try {
-          // *** Use the API route ***
-          const response = await fetch(`/api/papers/search?q=${encodeURIComponent(query)}`); //
+          const response = await fetch(`/api/papers/search?q=${encodeURIComponent(query)}`);
           if (!response.ok) {
               const errorData = await response.json();
               throw new Error(errorData.message || `API request failed with status ${response.status}`);
           }
-          const fetchedPapers: PaperDocument[] = await response.json(); //
+          const fetchedPapers: PaperDocument[] = await response.json();
 
+          setAllPapers(fetchedPapers);
           setPapers(fetchedPapers);
           if (fetchedPapers.length === 0 && query !== '*') {
              console.log(`No results found for "${query}"`);
-             // Optionally set a "no results" state/message here
           }
 
       } catch (err: any) {
           console.error(`Error fetching papers for query "${query}":`, err);
           setError(`Failed to load papers: ${err.message || 'Unknown error'}.`);
-          setPapers([]); // Clear papers on error
+          setPapers([]);
+          setAllPapers([]);
       } finally {
           setIsLoading(false);
           setIsSearching(false);
@@ -78,48 +80,102 @@ export default function HomePage() {
   };
 
 
-  // --- Fetch Initial Papers on Mount ---
+  const availableCategories = useMemo(() => {
+    const categorySet = new Set<string>();
+    allPapers.forEach(paper => {
+      if (paper.categories) {
+        paper.categories.forEach(cat => categorySet.add(cat));
+      }
+    });
+    return Array.from(categorySet).sort();
+  }, [allPapers]);
+
+  const filteredPapers = useMemo(() => {
+    if (selectedCategories.length === 0) return papers;
+    return papers.filter(paper => 
+      paper.categories?.some(cat => selectedCategories.includes(cat))
+    );
+  }, [papers, selectedCategories]);
+
   useEffect(() => {
-    // Ensure env vars are present before initial fetch
      if (process.env.NEXT_PUBLIC_TYPESENSE_HOST && process.env.NEXT_PUBLIC_TYPESENSE_SEARCH_ONLY_API_KEY) {
-         fetchPapers(); // Fetch initial papers ('*')
+         fetchPapers();
      } else {
          setError("Typesense configuration is missing. Check environment variables.");
          setIsLoading(false);
          console.error("Missing Typesense NEXT_PUBLIC environment variables");
      }
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
-
-  // --- Handle Search Form Submission ---
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!searchTerm.trim()) {
-        fetchPapers(); // If search is cleared, fetch initial papers again
+        fetchPapers();
         return;
     }
-    fetchPapers(searchTerm); // Fetch papers based on the search term
+    fetchPapers(searchTerm);
+  };
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  const clearFilters = () => {
+    setSelectedCategories([]);
+  };
+
+  const resetSearch = () => {
+    setSearchTerm('');
+    fetchPapers();
+  };
+
+  const togglePaperExpansion = (paperId: string) => {
+    setExpandedPaperId(prev => prev === paperId ? null : paperId);
   };
 
   return (
     <div className="flex flex-col min-h-screen">
       <header className="sticky top-0 z-10 border-b bg-background px-4 py-2 sm:px-6">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-xl font-semibold whitespace-nowrap">Social arXiv Demo</h1>
-          <form onSubmit={handleSearch} className="relative flex-1 max-w-xl">
-            <Input
-              type="search"
-              placeholder="Search papers..."
-              className="w-full rounded-lg bg-background pl-8"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+        <div className="grid grid-cols-3 items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-xl">■</Link>
+            <div className="flex items-center gap-3 text-sm">
+              <Link href="#" className="hover:text-foreground text-muted-foreground">[B] BLOG</Link>
+              <Link href="#" className="hover:text-foreground text-muted-foreground">[D] DOCS</Link>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 justify-center">
+            <Button 
+              onClick={resetSearch} 
+              variant="outline" 
+              size="icon"
+              className="flex-shrink-0"
               disabled={isSearching}
-            />
-            <Button type="submit" size="sm" className="absolute right-0 top-0 h-full rounded-l-none" disabled={isSearching}>
-              {isSearching ? 'Searching...' : 'Search'}
+              title="Reset search"
+            >
+              <RotateCcw className="h-4 w-4" />
             </Button>
-          </form>
-          <div className="flex items-center gap-2 whitespace-nowrap">
+            <form onSubmit={handleSearch} className="relative w-full max-w-md">
+              <Input
+                type="search"
+                placeholder="Search papers..."
+                className="w-full rounded-lg bg-background pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={isSearching}
+              />
+              <Button type="submit" size="sm" className="absolute right-0 top-0 h-full rounded-l-none" disabled={isSearching}>
+                {isSearching ? 'Searching...' : 'Search'}
+              </Button>
+            </form>
+          </div>
+          
+          <div className="flex items-center gap-2 justify-end whitespace-nowrap">
             <Link href="/login">
               <Button variant="outline" size="sm">Login</Button>
             </Link>
@@ -129,40 +185,125 @@ export default function HomePage() {
           </div>
         </div>
       </header>
+      
+      <div className="px-4 sm:px-6 py-8">
+        <h1 className="text-7xl font-bold tracking-tight">Feed<sup className="text-4xl text-muted-foreground">({filteredPapers.length})</sup></h1>
+      </div>
 
-      <main className="flex-1 p-4 sm:p-6">
-        {/* --- Paper Grid --- */}
-        {isLoading && <p>Loading papers...</p>}
-        {error && <p className="text-red-600">{error}</p>}
-        {/* Show papers only when not initial loading */}
-        {!isLoading && !error && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {papers.length > 0 ? (
-              papers.map((paper) => (
-                <Link href={`/paper/${paper.id}`} key={paper.id}>
-                  <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardHeader>
-                      <CardTitle className="text-lg line-clamp-2">{paper.title || `Paper ${paper.id}`}</CardTitle>
-                      <CardDescription className="text-xs"> {/* Opening Tag */}
-                         {(Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) || 'Unknown Authors'} - {paper.year || 'N/A'}
-                      </CardDescription> {/* *** CORRECTED CLOSING TAG *** */}
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground line-clamp-3">
-                        {paper.abstract || 'No abstract available.'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))
-            ) : (
-               // Show 'No papers found' only if not loading/searching and there are no errors
-               !isSearching && <p>No papers found.</p>
-            )}
+      <main className="flex-1 flex gap-6 p-4 sm:p-6 max-w-7xl mx-auto w-full">
+        <aside className="w-64 flex-shrink-0">
+          <div className="sticky top-20">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium">/ FILTER</h2>
+              {selectedCategories.length > 0 && (
+                <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground uppercase">
+                  Clear Filters
+                </button>
+              )}
+            </div>
+            
+            <div className="border-t border-border pt-4">
+              <button
+                onClick={() => setIsCategoryFilterOpen(!isCategoryFilterOpen)}
+                className="flex items-center gap-2 text-sm font-medium mb-3 w-full"
+              >
+                {isCategoryFilterOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                Category
+              </button>
+              
+              {isCategoryFilterOpen && (
+                <div className="space-y-2 pl-6">
+                  {availableCategories.map(category => (
+                    <label key={category} className="flex items-center gap-2 text-sm cursor-pointer hover:text-foreground">
+                      <Checkbox
+                        checked={selectedCategories.includes(category)}
+                        onCheckedChange={() => toggleCategory(category)}
+                      />
+                      <span className={selectedCategories.includes(category) ? 'text-foreground' : 'text-muted-foreground'}>
+                        {category}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        )}
-        {/* Show searching indicator separate from initial load */}
-         {isSearching && !isLoading && <p>Searching...</p>}
+        </aside>
+
+        <div className="flex-1">
+          {isLoading && <p>Loading papers...</p>}
+          {error && <p className="text-red-600">{error}</p>}
+          {!isLoading && !error && (
+            <div className="border-t border-border">
+              <div className="grid grid-cols-[140px_1fr] border-b border-border py-3 px-4 text-sm font-medium">
+                <div>/ DATE</div>
+                <div>/ NAME</div>
+              </div>
+              {filteredPapers.length > 0 ? (
+                filteredPapers.map((paper) => {
+                  const isExpanded = expandedPaperId === paper.id;
+                  return (
+                    <div key={paper.id} className="border-b border-border">
+                      <div 
+                        className="grid grid-cols-[140px_1fr_auto] py-4 px-4 hover:bg-accent/30 transition-colors cursor-pointer"
+                        onClick={() => togglePaperExpansion(paper.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl leading-none">■</span>
+                          <span className="text-sm">{paper.year || 'N/A'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xl font-normal truncate">{paper.title || `Paper ${paper.id}`}</div>
+                          <div className={`text-sm text-muted-foreground mt-1 ${isExpanded ? '' : 'truncate'}`}>
+                            {(Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) || 'Unknown Authors'}
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          {isExpanded && <Minus className="h-5 w-5" />}
+                        </div>
+                      </div>
+                      
+                      {isExpanded && (
+                        <div className="px-4 pb-6 space-y-6">
+                          <div className="grid grid-cols-[140px_1fr] gap-4">
+                            <div>
+                              <div className="text-sm font-medium">SUMMARY:</div>
+                            </div>
+                            <div>
+                              <p className="text-base">{paper.abstract || 'No abstract available.'}</p>
+                            </div>
+                          </div>
+                          
+                          {paper.categories && paper.categories.length > 0 && (
+                            <div className="grid grid-cols-[140px_1fr]">
+                              <div className="text-sm font-medium">TOPICS:</div>
+                              <div className="flex gap-2">
+                                {paper.categories.map((category, idx) => (
+                                  <span key={idx} className="border border-border px-3 py-1 text-sm uppercase">
+                                    {category}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <Link href={`/paper/${paper.id}`} className="block">
+                            <Button variant="outline" className="w-full rounded-full py-6 text-base">
+                              Read
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                !isSearching && <p className="p-4">No papers found.</p>
+              )}
+            </div>
+          )}
+          {isSearching && !isLoading && <p>Searching...</p>}
+        </div>
       </main>
 
       <footer className="border-t bg-background px-4 py-2 text-center text-xs text-muted-foreground sm:px-6">
