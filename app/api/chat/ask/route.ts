@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { pipeline } from '@xenova/transformers';
 
+// --- Route Segment Config for Vercel ---
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 // --- Configuration ---
 const qdrantCollectionName = 'paper_chunks'; 
 const embeddingModelName = 'Xenova/all-MiniLM-L6-v2'; 
@@ -60,6 +65,18 @@ function formatContext(chunks: any[]): string {
     
     // Concatenate the text of all chunks to pass the entire document text
     return chunks.map(chunk => chunk.payload?.chunkText || '').join('\n');
+}
+
+// --- CORS Headers ---
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// --- OPTIONS Handler for Preflight ---
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders as any });
 }
 
 // --- POST Handler for /api/chat/ask ---
@@ -178,11 +195,11 @@ Answer:`;
     console.log('Received final response via Fallback system.');
 
     // 5. Return the final AI response
-    return NextResponse.json({ response: finalAiResponseText }, { status: 200 });
+    return NextResponse.json({ response: finalAiResponseText }, { status: 200, headers: corsHeaders as any });
 
   } catch (error: any) {
     console.error('Error in chat/ask API route:', error);
     const errorMessage = error.message || 'An unknown error occurred';
-    return NextResponse.json({ message: 'Internal Server Error', error: errorMessage }, { status: 500 });
+    return NextResponse.json({ message: 'Internal Server Error', error: errorMessage }, { status: 500, headers: corsHeaders as any });
   }
 }
