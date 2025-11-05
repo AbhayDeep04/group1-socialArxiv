@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { pipeline } from '@xenova/transformers';
 
 // --- Route Segment Config for Vercel ---
 export const runtime = 'nodejs';
@@ -9,7 +8,6 @@ export const maxDuration = 60;
 
 // --- Configuration ---
 const qdrantCollectionName = 'paper_chunks'; 
-const embeddingModelName = 'Xenova/all-MiniLM-L6-v2'; 
 // Using stable paid model to bypass free tier rate limits
 const llmModelNames = [
   'openai/gpt-4o-mini', 
@@ -23,35 +21,6 @@ const qdrantClient = new QdrantClient({
     url: process.env.QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY,
 });
-
-// --- Load Embedding Model (Singleton) ---
-class EmbeddingPipelineSingleton {
-  static task = 'feature-extraction' as const;
-  static model = embeddingModelName;
-  static instancePromise: Promise<any> | null = null; 
-
-  static async getInstance(progress_callback: Function | null = null) {
-    if (!this.instancePromise) {
-      console.log('Loading embedding model for chat API...');
-      
-      this.instancePromise = pipeline(
-          this.task, 
-          this.model, 
-          { ...(progress_callback !== null && { progress_callback }) }
-      );
-      
-      try {
-        await this.instancePromise; 
-        console.log('Embedding model loaded.');
-      } catch (error) {
-         console.error("Failed to load embedding model:", error);
-         this.instancePromise = null; 
-         throw error; 
-      }
-    }
-    return this.instancePromise;
-  }
-}
 
 
 // --- Helper Function: Format Chunks into Context String ---
