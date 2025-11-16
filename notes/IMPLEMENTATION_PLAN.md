@@ -897,12 +897,12 @@ export async function retrieveChunks(params: {
 ```
 
 **Tasks:**
-- [ ] Install OpenAI SDK: `npm install openai`
-- [ ] Add `OPENAI_API_KEY` to `.env.local`
-- [ ] Create `/lib/openai-client.ts`
-- [ ] Update `/lib/qdrant-client.ts` with retrieval function
-- [ ] Test embedding generation
-- [ ] Verify Qdrant chunk structure matches requirements
+- [x] Install OpenAI SDK: `npm install openai`
+- [x] Add `OPENAI_API_KEY` to `.env.local`
+- [x] Create `/lib/ai-client.ts`
+- [x] Update `/lib/qdrant-client.ts` with retrieval function
+- [x] Test embedding generation
+- [x] Verify Qdrant chunk structure matches requirements
 
 ---
 

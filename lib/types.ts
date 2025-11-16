@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { UIMessage } from 'ai';
 
 // User Profile
 export interface UserProfile {
@@ -129,6 +130,23 @@ export interface FeedEvent {
   metadata?: any;
   createdAt: Timestamp;
 }
+
+// Citation data structure for RAG responses
+export type CitationData = {
+  citation: {
+    sid: string;           // S1, S2, S3, etc.
+    chunkId: string;       // Qdrant point ID
+    paperId: string;       // arXiv paper ID
+    title: string;         // Paper title
+    pageStart: number;     // Page range start
+    pageEnd: number;       // Page range end
+    textSnippet: string;   // Actual text chunk
+    score: number;         // Relevance score from vector search
+  };
+};
+
+// Message type with citation data parts
+export type ChatMessageWithCitations = UIMessage<never, CitationData>;
 
 // Retrieved Chunk from Qdrant
 export interface RetrievedChunk {
