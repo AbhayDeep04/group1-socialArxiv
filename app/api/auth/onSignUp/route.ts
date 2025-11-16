@@ -2,23 +2,24 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin SDK
-// Ensure your environment variables are set in .env.local
-const serviceAccount = {
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  // Replace the escaped newlines in the private key
-  privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-};
+// Initialize Firebase Admin SDK only if credentials are available
+let db: ReturnType<typeof getFirestore> | null = null;
 
-// Check if the app is already initialized to prevent duplicates
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount),
-  });
+if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+  const serviceAccount = {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  };
+
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert(serviceAccount),
+    });
+  }
+
+  db = getFirestore();
 }
-
-const db = getFirestore(); // Get Firestore instance from Admin SDK
 
 // POST handler for /api/auth/onSignUp
 export async function POST(request: Request) {
@@ -28,6 +29,11 @@ export async function POST(request: Request) {
     // Validate input
     if (!uid || !email) {
       return NextResponse.json({ message: 'Missing uid or email' }, { status: 400 });
+    }
+
+    // Check if Firebase Admin is initialized
+    if (!db) {
+      return NextResponse.json({ message: 'Firebase Admin not configured' }, { status: 500 });
     }
 
     // Create the user document in Firestore

@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // User profile
+    match /users/{userId}/profile/{document=**} {
+      allow read: if true; // Public profiles
+      allow create: if isOwner(userId);
+      allow update, delete: if isOwner(userId);
+    }
+    
+    // User library
+    match /users/{userId}/library/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // User uploads
+    match /users/{userId}/uploads/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // User conversations
+    match /users/{userId}/conversations/{conversationId} {
+      allow read, write: if isOwner(userId);
+      
+      // Conversation messages
+      match /messages/{messageId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Paper ratings
+    match /papers/{paperId}/ratings/{ratingId} {
+      allow read: if true; // Anyone can read ratings
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Paper comments
+    match /papers/{paperId}/comments/{commentId} {
+      allow read: if true; // Anyone can read comments
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Paper metadata
+    match /papers/{paperId}/metadata/{document=**} {
+      allow read: if true; // Anyone can read paper metadata
+      allow write: if isAuthenticated(); // Any authenticated user can update metadata
+    }
+    
+    // Activity feed events
+    match /feed_events/{eventId} {
+      allow read: if true; // Public feed
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
