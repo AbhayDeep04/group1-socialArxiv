@@ -26,7 +26,8 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": ["jest", "node"]
   },
   "include": [
     "next-env.d.ts",
@@ -36,9 +37,11 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     ".next\\dev/types/**/*.ts",
-    ".next\\dev/types/**/*.ts"
+    ".next\\dev/types/**/*.ts",
+    "jest.setup.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "scripts/ingest.mjs"
   ]
 }
