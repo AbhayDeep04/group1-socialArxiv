@@ -163,7 +163,7 @@ describe('Homepage (Use Cases 11 & 12)', () => {
     });
   });
 
-  // --- NEW TEST ---
+  
   // Test Case: TC-FEED-02 (Config Error)
   it('should show config error if env vars are missing (TC-FEED-02)', async () => {
     // 1. Setup: Override the 'beforeEach' env vars for this test
@@ -183,7 +183,7 @@ describe('Homepage (Use Cases 11 & 12)', () => {
     expect(screen.queryByText('Loading papers...')).not.toBeInTheDocument();
   });
 
-  // --- NEW TEST ---
+  
   // Test Case: TS-11.2 (No papers found - Initial Load)
   it('should show "No papers found" if initial load is empty (TS-11.2)', async () => {
     // 1. Setup Mock: Simulate an empty array response
@@ -205,7 +205,7 @@ describe('Homepage (Use Cases 11 & 12)', () => {
     expect(screen.queryByText('Loading papers...')).not.toBeInTheDocument();
   });
   
-  // --- NEW TEST ---
+  
   // Test Case: TS-12.2 (No search matches)
   it('should show "No papers found" if search returns empty (TS-12.2)', async () => {
     // 1. Setup Mock for initial load
@@ -242,6 +242,32 @@ describe('Homepage (Use Cases 11 & 12)', () => {
       // The "No papers found" message should appear
       expect(screen.getByText('No papers found.')).toBeInTheDocument();
     });
+  });
+
+  
+  // Test Case: TS-11.3 (Typesense connection error)
+  it('should show a fetch error if the API call fails (TS-11.3)', async () => {
+    // 1. Setup Mock: Simulate a failed API call (e.g., 500 error)
+    mockFetch.mockResolvedValueOnce({
+      ok: false, // Simulate a server error
+      status: 500,
+      json: () => Promise.resolve({ message: 'Internal Server Error' }),
+    });
+
+    // 2. Initialization: Render the component
+    render(<HomePage />);
+
+    // 3. Expected Results: Wait for the component's error message to appear
+    await waitFor(() => {
+      // --- THIS IS THE FIX ---
+      // This text matches the DOM output: "Failed to load papers: Internal Server Error."
+      expect(screen.getByText(/Failed to load papers: Internal Server Error/)).toBeInTheDocument();
+      // --- END FIX ---
+    });
+
+    // 4. Expected Results: Verify no papers or loading messages are shown
+    expect(screen.queryByText('Loading papers...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Title for paper1')).not.toBeInTheDocument();
   });
 
 });
