@@ -2,9 +2,12 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { generateEmbedding } from './ai-client';
 import type { RetrievedChunk } from './types';
 
+// Remove port :6333 from URL if present (for Qdrant Cloud compatibility)
+const qdrantUrl = process.env.QDRANT_URL?.replace(':6333', '') || 'http://localhost:6333';
+
 export const qdrant = new QdrantClient({
-  url: process.env.QDRANT_URL!,
-  apiKey: process.env.QDRANT_API_KEY!,
+  url: qdrantUrl,
+  apiKey: process.env.QDRANT_API_KEY || '',
 });
 
 export async function retrieveChunks(params: {

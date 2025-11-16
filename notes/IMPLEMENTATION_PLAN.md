@@ -1200,11 +1200,11 @@ function estimateTokens(messages: any[]): number {
 ```
 
 **Tasks:**
-- [ ] Create `/app/api/chat/route.ts` with streaming support
-- [ ] Implement citation parsing logic
-- [ ] Implement memory summarization
-- [ ] Test streaming response
-- [ ] Test multi-turn context preservation
+- [x] Create `/app/api/chat/route.ts` with streaming support
+- [x] Implement citation parsing logic
+- [x] Implement memory summarization
+- [x] Test streaming response
+- [x] Test multi-turn context preservation
 
 ---
 
