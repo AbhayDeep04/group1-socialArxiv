@@ -27,6 +27,7 @@ service cloud.firestore {
     // Collection group read for notes (for library queries)
     match /{path=**}/notes/{noteId} {
       allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow write: if false;
     }
 
     // Notes are private and nested by user and paper
@@ -107,6 +108,41 @@ service cloud.firestore {
     // Paper rating aggregates - read-only for clients, writes via API
     match /papers/{paperId}/aggregates/{aggId} {
       allow read: if true;
+      allow write: if false;
+    }
+
+    // User documents - private settings (owner only)
+    match /users/{userId} {
+      allow read, update: if isOwner(userId);
+      allow create: if isOwner(userId) || isSignedIn();
+    }
+
+    // Public user profiles - readable by anyone, owner can write limited fields
+    match /profiles/{userId} {
+      allow read: if true;
+      allow create, update: if isOwner(userId)
+        && request.resource.data.displayName is string
+        && (!request.resource.data.keys().hasAny(['bio']) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 300))
+        && (!request.resource.data.keys().hasAny(['institution']) || (request.resource.data.institution is string && request.resource.data.institution.size() <= 100))
+        && (!request.resource.data.keys().hasAny(['location']) || (request.resource.data.location is string && request.resource.data.location.size() <= 100))
+        && (!request.resource.data.keys().hasAny(['pinnedPaperIds']) || (request.resource.data.pinnedPaperIds is list && request.resource.data.pinnedPaperIds.size() <= 4))
+        && request.resource.data.searchName is string;
+    }
+
+    // Follow relationships - read by anyone, write only via server (Admin SDK)
+    match /profiles/{userId}/followers/{followerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /profiles/{userId}/following/{targetId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Collection group read for bookmarks (for library queries)
+    match /{path=**}/bookmarks/{paperId} {
+      allow read: if isSignedIn();
       allow write: if false;
     }
   }

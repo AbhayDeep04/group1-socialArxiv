@@ -33,16 +33,34 @@ export async function POST(request: Request) {
     // Create the user document in Firestore
     // Reference the 'users' collection and set the document ID to the user's UID
     const userRef = db.collection('users').doc(uid);
+    const profileRef = db.collection('profiles').doc(uid);
+    
+    const defaultDisplayName = displayName || email.split('@')[0];
+    const now = new Date();
 
     await userRef.set({
       email: email,
-      displayName: displayName || email.split('@')[0], // Use provided or default
-      role: 'user', // Default role
-      createdAt: new Date().toISOString(), // Use Firestore timestamp later if needed
+      displayName: defaultDisplayName,
+      role: 'user',
+      createdAt: now,
+      updatedAt: now,
     });
 
-    console.log(`Firestore document created for user: ${uid}`);
-    // Return success response
+    await profileRef.set({
+      displayName: defaultDisplayName,
+      searchName: defaultDisplayName.toLowerCase(),
+      bio: '',
+      institution: '',
+      location: '',
+      searchInstitution: '',
+      pinnedPaperIds: [],
+      followerCount: 0,
+      followingCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    console.log(`Firestore documents created for user: ${uid}`);
     return NextResponse.json({ ok: true }, { status: 200 });
 
   } catch (error: any) {

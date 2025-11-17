@@ -27,7 +27,7 @@ export function UserAvatar({
   user,
   className,
   size = 32,
-}: { user?: User | null; className?: string; size?: number }) {
+}: { user?: User | null | { displayName?: string; photoURL?: string | null; email?: string; uid?: string }; className?: string; size?: number }) {
   const initials = getInitials(user?.displayName, user?.email);
   const bg = stringToHsl(user?.uid || user?.email || initials);
 

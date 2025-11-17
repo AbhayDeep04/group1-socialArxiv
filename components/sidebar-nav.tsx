@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Home, BookMarked, User, Moon, Sun, LogOut, Upload } from "lucide-react";
+import { Home, BookMarked, User, Moon, Sun, LogOut, Upload, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { UserAvatar } from "@/components/user-avatar";
@@ -107,6 +107,25 @@ export function SidebarNav() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">Upload Paper</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href="/search/users">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "rounded-lg",
+                      pathname === "/search/users" && "bg-accent text-accent-foreground"
+                    )}
+                  >
+                    <Users className="h-5 w-5" />
+                    <span className="sr-only">Search Users</span>
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search Users</TooltipContent>
             </Tooltip>
           </div>
 
