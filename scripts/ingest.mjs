@@ -3,11 +3,11 @@ import dotenv from 'dotenv';
 import path from 'path';
 import Typesense from 'typesense';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import fs from 'fs/promises'; // Use promises version for async/await
-import { PdfReader } from 'pdfreader'; // Correct import for pdfreader
-import { pipeline } from '@xenova/transformers'; // Can use top-level import in ESM
-import { fileURLToPath } from 'url'; // Helper to get __dirname in ESM
-import { v5 as uuidv5 } from 'uuid'; // Import v5 function for deterministic UUIDs
+import fs from 'fs/promises';
+import { PdfReader } from 'pdfreader';
+import { fileURLToPath } from 'url';
+import { v5 as uuidv5 } from 'uuid';
+import OpenAI from 'openai';
 
 // --- Configuration ---
 // Get __dirname equivalent in ES module
@@ -18,13 +18,13 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 console.log('DEBUG: Typesense Admin Key Loaded:', process.env.TYPESENSE_ADMIN_API_KEY); // Keep debug line
 
-const pdfsFolderPath = path.join(__dirname, '../public/pdfs'); // Path to your PDFs
-const metadataFilePath = path.join(pdfsFolderPath, 'metadata.json'); // Path to metadata file
+const pdfsFolderPath = path.join(__dirname, '../public/pdfs');
+const metadataFilePath = path.join(pdfsFolderPath, 'metadata.json');
 const typesenseCollectionName = 'papers';
 const qdrantCollectionName = 'paper_chunks';
-const embeddingModelName = 'Xenova/all-MiniLM-L6-v2'; // A good small & fast model
-const chunkSize = 500; // Characters per chunk (adjust as needed)
-const chunkOverlap = 50; // Characters overlap between chunks
+const embeddingModel = 'text-embedding-3-small';
+const chunkSize = 500;
+const chunkOverlap = 50;
 
 // --- Initialize Clients ---
 const typesenseClient = new Typesense.Client({
@@ -40,6 +40,10 @@ const typesenseClient = new Typesense.Client({
 const qdrantClient = new QdrantClient({
     url: process.env.QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY,
+});
+
+const openaiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
 });
 
 // --- Helper Functions ---
@@ -142,9 +146,9 @@ async function ingestData() {
              }
          }
 
-        // Create Qdrant collection
+        // Create Qdrant collection (text-embedding-3-small is 1536-dim)
         await qdrantClient.createCollection(qdrantCollectionName, {
-            vectors: { size: 384, distance: 'Cosine' },
+            vectors: { size: 1536, distance: 'Cosine' },
         });
          // Create payload index for paperId filtering
         await qdrantClient.createPayloadIndex(qdrantCollectionName, {
@@ -158,16 +162,12 @@ async function ingestData() {
         return;
     }
 
-    // 3. Load Embedding Pipeline
-    console.log(`Loading embedding model: ${embeddingModelName}...`);
-    let embedder;
-    try {
-        embedder = await pipeline('feature-extraction', embeddingModelName, { quantized: false });
-    } catch (error) {
-        console.error("Failed to load the embedding model:", error);
+    // 3. Verify OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+        console.error('Error: OPENAI_API_KEY is not set in .env.local');
         return;
     }
-    console.log('Embedding model loaded.');
+    console.log(`Using OpenAI embedding model: ${embeddingModel}`);
 
     // 4. Load metadata from JSON file
     console.log(`Loading metadata from: ${metadataFilePath}`);
@@ -242,16 +242,18 @@ async function ingestData() {
         }
          console.log(` -> Extracted text, created ${chunks.length} chunks.`);
 
-        // Generate embeddings
+        // Generate embeddings with OpenAI
          console.log(` -> Generating embeddings for ${chunks.length} chunks...`);
-        let chunkEmbeddings;
+        let chunkEmbeddings = [];
         try {
-             const embeddingBatchSize = 32;
-             chunkEmbeddings = [];
+             const embeddingBatchSize = 100; // OpenAI allows up to 2048 inputs per request
              for (let i = 0; i < chunks.length; i += embeddingBatchSize) {
                  const batchChunks = chunks.slice(i, i + embeddingBatchSize);
-                 const batchEmbeddingsTensor = await embedder(batchChunks, { pooling: 'mean', normalize: true });
-                 chunkEmbeddings.push(...batchEmbeddingsTensor.tolist());
+                 const response = await openaiClient.embeddings.create({
+                     model: embeddingModel,
+                     input: batchChunks,
+                 });
+                 chunkEmbeddings.push(...response.data.map(d => d.embedding));
                  console.log(`    -> Embedded chunk batch ${Math.floor(i / embeddingBatchSize) + 1}/${Math.ceil(chunks.length / embeddingBatchSize)}`);
              }
         } catch (error) {

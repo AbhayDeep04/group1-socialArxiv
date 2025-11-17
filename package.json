@@ -35,6 +35,7 @@
     "lucide-react": "^0.548.0",
     "nanoid": "^5.1.6",
     "next": "16.0.0",
+    "openai": "^6.9.0",
     "pdfreader": "^3.0.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",

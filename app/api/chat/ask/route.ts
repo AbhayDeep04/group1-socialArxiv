@@ -3,9 +3,9 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { google } from '@ai-sdk/google';
-import { pipeline } from '@xenova/transformers';
 import { getAdminDb, getAdminAuth } from '@/lib/firebaseAdmin';
 import { Message, Source } from '@/lib/types';
+import OpenAI from 'openai';
 
 // --- Route Segment Config for Vercel ---
 export const runtime = 'nodejs';
@@ -14,24 +14,16 @@ export const maxDuration = 60;
 
 // --- Configuration ---
 const qdrantCollectionName = 'paper_chunks';
-const embeddingModelName = 'Xenova/all-MiniLM-L6-v2';
 
-// --- Initialize Qdrant Client ---
+// --- Initialize Clients ---
 const qdrantClient = new QdrantClient({
   url: process.env.QDRANT_URL,
   apiKey: process.env.QDRANT_API_KEY,
 });
 
-// --- Singleton Embedding Model ---
-let embedderPromise: any;
-
-async function getEmbedder() {
-  if (!embedderPromise) {
-    console.log(`Loading embedding model: ${embeddingModelName}...`);
-    embedderPromise = pipeline('feature-extraction', embeddingModelName, { quantized: false });
-  }
-  return embedderPromise;
-}
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // --- CORS Headers ---
 const corsHeaders = {
@@ -117,58 +109,49 @@ export async function POST(request: NextRequest) {
     });
     console.log(`Saved user message with ID: ${userMessageRef.id}`);
 
-    // --- Step 3: Retrieve ALL chunks for the paper (simple approach) ---
-    console.log(`Retrieving ALL chunks for paper ${paperId}...`);
-    
-    let allChunks = [];
-    let offset;
+    // --- Step 3: Generate embedding for user query ---
+    console.log('Generating embedding for user query...');
+    const embeddingResponse = await openaiClient.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: message,
+    });
+    const queryEmbedding = embeddingResponse.data[0].embedding;
+    console.log(`Generated ${queryEmbedding.length}-dim embedding`);
 
-    while (true) {
-      const scrollResponse = await qdrantClient.scroll(qdrantCollectionName, {
-        filter: {
-          must: [{ key: 'paperId', match: { value: paperId } }],
-        },
-        with_payload: true,
-        with_vector: false,
-        limit: 500,
-        offset: offset,
-      });
+    // --- Step 4: Vector search in Qdrant using query embedding ---
+    console.log(`Searching Qdrant for paper ${paperId} with topK=${topK}...`);
+    const hits = await qdrantClient.search(qdrantCollectionName, {
+      vector: queryEmbedding,
+      limit: topK,
+      with_payload: true,
+      filter: {
+        must: [{ key: 'paperId', match: { value: paperId } }],
+      },
+    });
+    console.log(`Qdrant returned ${hits.length} hits.`);
 
-      const { points, next_page_offset } = scrollResponse;
-      allChunks.push(...points);
-      offset = next_page_offset;
-
-      if (offset === null || points.length === 0) {
-        break;
-      }
-    }
-
-    console.log(`Retrieved ${allChunks.length} chunks from Qdrant.`);
-
-    // --- Step 4: Sort chunks by index and build full paper context ---
-    allChunks.sort((a: any, b: any) => (a.payload?.chunkIndex ?? 0) - (b.payload?.chunkIndex ?? 0));
-    
-    const paperContext = allChunks
-      .map((chunk: any) => chunk.payload?.chunkText || '')
-      .join('\n');
+    // --- Step 5: Build context and sources from top matches ---
+    const paperContext = hits
+      .map((h: any) => h?.payload?.chunkText || '')
+      .filter(Boolean)
+      .join('\n\n');
 
     console.log(`Paper context length: ${paperContext.length} characters`);
 
-    // Create minimal sources info (just for display)
-    const sources: Source[] = [{
-      index: 1,
-      chunkIndex: 0,
-      score: 1.0,
-      text: `Full paper (${allChunks.length} chunks)`,
-    }];
+    const sources: Source[] = hits.map((h: any, i: number) => ({
+      index: i + 1,
+      chunkIndex: h?.payload?.chunkIndex ?? 0,
+      score: h?.score ?? 0,
+      text: (h?.payload?.chunkText || '').slice(0, 500),
+    }));
 
-    // --- Step 5: Build conversation history string ---
+    // --- Step 6: Build conversation history string ---
     const historyString = history
       .slice(-6) // Last 6 messages for context
       .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n');
 
-    // --- Step 6: Construct LLM prompt ---
+    // --- Step 7: Construct LLM prompt ---
     const prompt = `You are a helpful research assistant. Answer the user's question based on the research paper provided below.
 
 ${historyString ? `Previous conversation:\n${historyString}\n\n` : ''}Research Paper:
@@ -183,7 +166,7 @@ Answer:`;
 
     console.log('Calling LLM...');
 
-    // --- Step 7: Call LLM with fallback ---
+    // --- Step 8: Call LLM with fallback ---
     let finalAiResponseText = '';
     let success = false;
     let lastError = null;
@@ -222,7 +205,7 @@ Answer:`;
       return NextResponse.json({ error: `System Error: ${errorMsg}` }, { status: 500 });
     }
 
-    // --- Step 8: Save assistant message to Firestore ---
+    // --- Step 9: Save assistant message to Firestore ---
     const assistantMessageRef = await messagesRef.add({
       role: 'assistant',
       content: finalAiResponseText,
@@ -231,12 +214,12 @@ Answer:`;
     });
     console.log(`Saved assistant message with ID: ${assistantMessageRef.id}`);
 
-    // --- Step 9: Update conversation updatedAt timestamp ---
+    // --- Step 10: Update conversation updatedAt timestamp ---
     await db.collection('conversations').doc(conversationId).update({
       updatedAt: new Date(),
     });
 
-    // --- Step 10: Return response ---
+    // --- Step 11: Return response ---
     return NextResponse.json(
       {
         response: finalAiResponseText,
