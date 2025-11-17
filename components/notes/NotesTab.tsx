@@ -88,8 +88,8 @@ export function NotesTab({ paperId, onJumpToHighlight }: NotesTabProps) {
             <Textarea
               value={newNoteContent}
               onChange={(e) => setNewNoteContent(e.target.value)}
-              placeholder="Write a note about this paper..."
-              className="min-h-[80px] resize-none"
+              placeholder="Write a note about this paper... (supports markdown)"
+              className="min-h-[80px] resize-none font-mono text-sm"
               autoFocus
             />
             <div className="flex gap-2 justify-end">
@@ -129,6 +129,7 @@ export function NotesTab({ paperId, onJumpToHighlight }: NotesTabProps) {
               <NoteItem
                 key={note.id}
                 note={note}
+                paperId={paperId}
                 onDelete={handleDeleteNote}
                 onJumpToHighlight={onJumpToHighlight}
               />
