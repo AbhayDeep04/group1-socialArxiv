@@ -17,7 +17,15 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+// Only load .env.local in local development (not on Vercel)
+if (!process.env.VERCEL) {
+    dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+}
+
+// Validate required environment variables
+if (!process.env.QDRANT_URL || !process.env.QDRANT_API_KEY || !process.env.OPENAI_API_KEY) {
+    throw new Error('Missing required environment variables: QDRANT_URL, QDRANT_API_KEY, or OPENAI_API_KEY');
+}
 
 const qdrantCollectionName = 'paper_semantics';
 const embeddingModel = 'text-embedding-3-small';
@@ -134,6 +142,22 @@ function chunkText(text, size, overlap) {
     return chunks.filter(chunk => chunk && chunk.trim().length > 0);
 }
 
+async function ensureQdrantCollection() {
+    try {
+        await qdrantClient.getCollection(qdrantCollectionName);
+    } catch (error) {
+        if (error.status === 404) {
+            console.log(`Creating Qdrant collection "${qdrantCollectionName}"...`);
+            await qdrantClient.createCollection(qdrantCollectionName, {
+                vectors: { size: 1536, distance: 'Cosine' },
+            });
+            console.log(`✅ Created Qdrant collection`);
+        } else {
+            throw error;
+        }
+    }
+}
+
 async function checkIfAlreadyHydrated(paperId) {
     try {
         const result = await qdrantClient.scroll(qdrantCollectionName, {
@@ -155,6 +179,9 @@ async function checkIfAlreadyHydrated(paperId) {
 async function hydrateFullText(paperId, pdfUrl) {
     console.log(`\n🔄 Hydrating full text for paper: ${paperId}`);
     console.log(`   PDF URL: ${pdfUrl}`);
+
+    // Ensure Qdrant collection exists
+    await ensureQdrantCollection();
 
     // Check if already processed
     const alreadyHydrated = await checkIfAlreadyHydrated(paperId);

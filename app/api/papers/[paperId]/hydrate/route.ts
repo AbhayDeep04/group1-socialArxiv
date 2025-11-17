@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_after as after } from 'next/server';
 
 // This endpoint triggers background hydration for a paper's full text
 // Called when a user opens a paper to start embedding process in background
+
+export const runtime = 'nodejs';
+export const maxDuration = 60; // Hydration can take 10-20 seconds
 
 export async function POST(
   request: NextRequest,
@@ -18,15 +22,33 @@ export async function POST(
       );
     }
 
-    // Trigger hydration in background (don't await)
-    // This allows the API to return immediately while processing continues
-    hydrateInBackground(paperId, pdfUrl).catch(error => {
-      console.error(`Background hydration failed for ${paperId}:`, error);
+    console.log(`Hydration POST received for ${paperId}`);
+
+    // Use Next.js after() to run background task that persists after response
+    after(async () => {
+      try {
+        const { hydrateFullText } = await import('@/scripts/hydrate_fulltext.mjs');
+        const url = pdfUrl || `https://arxiv.org/pdf/${paperId}.pdf`;
+        
+        console.log(`[Background] Starting hydration for ${paperId}`);
+        const startTime = Date.now();
+        
+        const result = await hydrateFullText(paperId, url);
+        const duration = Date.now() - startTime;
+        
+        if (result.success) {
+          console.log(`[Background] ✅ Hydration complete for ${paperId} in ${duration}ms`);
+        } else {
+          console.log(`[Background] ❌ Hydration failed for ${paperId}: ${result.error}`);
+        }
+      } catch (error) {
+        console.error(`[Background] Fatal error hydrating ${paperId}:`, error);
+      }
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Full-text hydration started in background',
+      message: 'Full-text hydration scheduled in background',
       paperId,
     });
 
@@ -36,32 +58,6 @@ export async function POST(
       { error: 'Failed to trigger hydration' },
       { status: 500 }
     );
-  }
-}
-
-async function hydrateInBackground(paperId: string, pdfUrl?: string) {
-  // Dynamic import to avoid loading heavy dependencies at startup
-  const { hydrateFullText } = await import('@/scripts/hydrate_fulltext.mjs');
-  
-  const url = pdfUrl || `https://arxiv.org/pdf/${paperId}.pdf`;
-  
-  console.log(`[Background] Starting hydration for ${paperId}`);
-  const startTime = Date.now();
-  
-  try {
-    const result = await hydrateFullText(paperId, url);
-    const duration = Date.now() - startTime;
-    
-    if (result.success) {
-      console.log(`[Background] ✅ Hydration complete for ${paperId} in ${duration}ms`);
-    } else {
-      console.log(`[Background] ❌ Hydration failed for ${paperId}: ${result.error}`);
-    }
-    
-    return result;
-  } catch (error) {
-    console.error(`[Background] Fatal error hydrating ${paperId}:`, error);
-    throw error;
   }
 }
 
