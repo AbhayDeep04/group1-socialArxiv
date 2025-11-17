@@ -19,6 +19,16 @@ service cloud.firestore {
       }
     }
 
+    // Bookmarks - user-specific
+    match /users/{userId}/bookmarks/{paperId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Collection group read for notes (for library queries)
+    match /{path=**}/notes/{noteId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
     // Notes are private and nested by user and paper
     match /users/{userId}/papers/{paperId}/notes/{noteId} {
       allow read: if isOwner(userId);
@@ -65,6 +75,12 @@ service cloud.firestore {
       
       allow delete: if isSignedIn() 
                     && request.auth.uid == resource.data.ownerId;
+    }
+
+    // Collection group read for comments (for library queries)
+    match /{path=**}/comments/{commentId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Comments on papers - read-only for clients, writes via API

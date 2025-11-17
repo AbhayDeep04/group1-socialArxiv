@@ -18,7 +18,7 @@ import { Message, MessageContent, MessageResponse } from '@/components/ai-elemen
 import { Textarea } from '@/components/ui/textarea';
 
 import { ChatMessage, Source } from '@/lib/types';
-import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +38,7 @@ import { Note, Rect } from '@/lib/types/note';
 import { addAnnotationNote, subscribeToNotes, addGeneralNote } from '@/lib/db/notes';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { SimilarPapersTab } from '@/components/similar/SimilarPapersTab';
+import { toggleBookmark, subscribeToBookmark } from '@/lib/firestore/bookmarks';
 import {
   AudioPlayerProvider,
   AudioPlayerButton,
@@ -114,6 +115,9 @@ export default function PaperPage() {
   // TTS State (ElevenLabs)
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+
+  // Bookmark State
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   // Hydration tracking
   const hydrationSentRef = useRef(false);
@@ -201,6 +205,28 @@ export default function PaperPage() {
         console.warn('Hydration trigger failed:', err);
       });
   }, [paperId, metadata]);
+
+  // Subscribe to bookmark state
+  useEffect(() => {
+    if (!user || !paperId) return;
+
+    const unsubscribe = subscribeToBookmark(user.uid, paperId, (bookmarked) => {
+      setIsBookmarked(bookmarked);
+    });
+
+    return () => unsubscribe();
+  }, [user, paperId]);
+
+  // Handle bookmark toggle
+  const handleToggleBookmark = async () => {
+    if (!user) return;
+    
+    try {
+      await toggleBookmark(user.uid, paperId);
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+    }
+  };
 
   // Load all conversations for this paper
   const loadConversations = useCallback(async () => {
@@ -580,6 +606,24 @@ export default function PaperPage() {
             {/* PDF Controls */}
             <div className="flex items-center justify-center h-12 border-b bg-background relative px-3 gap-2">
               <TooltipProvider>
+                {/* Bookmark button - far left */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      disabled={!isAuthed}
+                      onClick={handleToggleBookmark}
+                      className="h-8 w-8"
+                    >
+                      <Bookmark className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isBookmarked ? 'Remove bookmark' : 'Bookmark paper'}</p>
+                  </TooltipContent>
+                </Tooltip>
+
                 {/* AI Summary - directly left of zoom out */}
                 <Tooltip>
                   <TooltipTrigger asChild>
