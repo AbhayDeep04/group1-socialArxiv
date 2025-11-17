@@ -267,7 +267,15 @@ async function flushQdrantBatch(batch) {
         });
         console.log(`  ✅ Upserted ${batch.length} abstract embeddings to Qdrant`);
     } catch (error) {
-        console.error('Error upserting to Qdrant:', error.message);
+        console.error('\n❌ Qdrant Upsert Error:');
+        console.error('Message:', error.message);
+        console.error('Status:', error.status);
+        console.error('Data:', JSON.stringify(error.data, null, 2));
+        console.error('Batch size:', batch.length);
+        console.error('First point ID:', batch[0]?.id);
+        console.error('Vector dimension:', batch[0]?.vector?.length);
+        // Don't log full sample to avoid spam
+        process.exit(1); // Stop on first error to debug
     }
 }
 

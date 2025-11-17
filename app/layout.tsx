@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { UploadDialogProvider } from "@/components/providers/upload-dialog-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,10 +33,12 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <AuthProvider>
-            <div className="flex min-h-screen">
-              <SidebarNav />
-              <main className="flex-1 overflow-y-auto">{children}</main>
-            </div>
+            <UploadDialogProvider>
+              <div className="flex min-h-screen">
+                <SidebarNav />
+                <main className="flex-1 overflow-y-auto">{children}</main>
+              </div>
+            </UploadDialogProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

@@ -5,12 +5,14 @@ import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Home, BookMarked, User, Moon, Sun, LogOut } from "lucide-react";
+import { Home, BookMarked, User, Moon, Sun, LogOut, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { UserAvatar } from "@/components/user-avatar";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebaseConfig";
+import { useUploadDialog } from "@/components/providers/upload-dialog-provider";
+import { UploadPaperDialog } from "@/components/upload/upload-paper-dialog";
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -18,6 +20,7 @@ export function SidebarNav() {
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const { user, loading: authLoading } = useAuth();
+  const { openDialog } = useUploadDialog();
 
   const items = [
     { href: "/library", label: "Library", icon: BookMarked },
@@ -48,9 +51,26 @@ export function SidebarNav() {
               </TooltipTrigger>
               <TooltipContent side="right">Home</TooltipContent>
             </Tooltip>
-            <div className="my-1 h-px w-8 bg-border" />
 
-{items.map(({ href, label, icon: Icon }) => {
+            <div className="h-px w-8 bg-border" />
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={user ? "/profile" : "/login"}>
+                  <Button variant="ghost" size="icon" className="rounded-lg">
+                    {!authLoading && user ? (
+                      <UserAvatar user={user} size={20} />
+                    ) : (
+                      <User className="h-5 w-5" />
+                    )}
+                    <span className="sr-only">Profile</span>
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">{user ? "Profile" : "Login"}</TooltipContent>
+            </Tooltip>
+
+            {items.map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
               return (
                 <Tooltip key={href}>
@@ -76,38 +96,39 @@ export function SidebarNav() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={user ? "/profile" : "/login"}>
-                  <Button variant="ghost" size="icon" className="rounded-lg">
-                    {!authLoading && user ? (
-                      <UserAvatar user={user} size={20} />
-                    ) : (
-                      <User className="h-5 w-5" />
-                    )}
-                    <span className="sr-only">Profile</span>
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">{user ? "Profile" : "Login"}</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="rounded-lg"
-                  onClick={() => setTheme(isDark ? "light" : "dark")}
+                  onClick={openDialog}
                 >
-                  {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                  <span className="sr-only">Toggle theme</span>
+                  <Upload className="h-5 w-5" />
+                  <span className="sr-only">Upload Paper</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">Toggle theme</TooltipContent>
+              <TooltipContent side="right">Upload Paper</TooltipContent>
             </Tooltip>
           </div>
 
+          <UploadPaperDialog />
+
           {!authLoading && user && (
             <div className="flex flex-col items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-lg"
+                    onClick={() => setTheme(isDark ? "light" : "dark")}
+                  >
+                    {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    <span className="sr-only">Toggle theme</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Toggle theme</TooltipContent>
+              </Tooltip>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
