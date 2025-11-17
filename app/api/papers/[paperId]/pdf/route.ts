@@ -21,8 +21,41 @@ export async function GET(
     // Remove trailing .pdf if present
     const id = idRaw.replace(/\.pdf$/i, '');
 
-    // Construct arXiv PDF URL
-    const arxivPdfUrl = `https://arxiv.org/pdf/${encodeURIComponent(id)}.pdf`;
+    // Check if this is a local file (non-arXiv ID format)
+    // arXiv IDs look like: 2510.01345, 1234.5678, etc.
+    const isArxivId = /^\d{4}\.\d{4,5}(v\d+)?$/.test(id);
+
+    let pdfUrl: string;
+    
+    if (isArxivId) {
+      // Fetch from arXiv
+      pdfUrl = `https://arxiv.org/pdf/${encodeURIComponent(id)}.pdf`;
+    } else {
+      // Local file - return from public/pdfs
+      const fs = await import('fs');
+      const path = await import('path');
+      const filePath = path.join(process.cwd(), 'public', 'pdfs', `${id}.pdf`);
+      
+      if (!fs.existsSync(filePath)) {
+        return NextResponse.json(
+          { error: 'PDF not found' },
+          { status: 404 }
+        );
+      }
+
+      const fileBuffer = fs.readFileSync(filePath);
+      
+      return new NextResponse(fileBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${id}.pdf"`,
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
+    }
+
+    // Fetch from arXiv (for arXiv papers)
+    const arxivPdfUrl = pdfUrl;
 
     // Forward Range header if present (for partial PDF loading)
     const outgoingHeaders: Record<string, string> = {
