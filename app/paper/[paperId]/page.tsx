@@ -30,6 +30,7 @@ import { NotesTab } from '@/components/notes/NotesTab';
 import { NewAnnotationDialog } from '@/components/notes/NewAnnotationDialog';
 import { Note, Rect } from '@/lib/types/note';
 import { addAnnotationNote, subscribeToNotes } from '@/lib/db/notes';
+import { CommentsSection } from '@/components/comments/CommentsSection';
 
 const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
@@ -688,22 +689,9 @@ export default function PaperPage() {
 
             {/* Comments Tab */}
             <TabsContent value="comments" className="flex-1 flex flex-col mt-0 overflow-hidden">
-              {!isAuthed ? (
-                <PleaseLogin feature="Comments" />
-              ) : (
-                <>
-                  <div className="p-3 border-b">
-                    <h2 className="font-semibold">Community Comments</h2>
-                    <p className="text-xs text-muted-foreground">Discuss this paper with others</p>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-4">
-                    <div className="flex items-center justify-center h-full">
-                      <p className="text-sm text-muted-foreground">Comments feature coming soon...</p>
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="flex-1 overflow-y-auto p-4">
+                <CommentsSection paperId={paperId} />
+              </div>
             </TabsContent>
 
             {/* Similar Papers Tab */}

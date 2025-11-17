@@ -47,5 +47,16 @@ service cloud.firestore {
 
       allow delete: if isOwner(userId);
     }
+
+    // Comments on papers - read-only for clients, writes via API
+    match /papers/{paperId}/comments/{commentId} {
+      allow read: if true;
+      allow write: if false;
+      
+      match /votes/{voteId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
   }
 }
