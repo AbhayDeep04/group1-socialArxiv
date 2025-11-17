@@ -26,6 +26,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth-context';
+import { NotesTab } from '@/components/notes/NotesTab';
+import { NewAnnotationDialog } from '@/components/notes/NewAnnotationDialog';
+import { Note, Rect } from '@/lib/types/note';
+import { addAnnotationNote, subscribeToNotes } from '@/lib/db/notes';
 
 const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
@@ -76,8 +80,16 @@ export default function PaperPage() {
   const [isAiResponding, setIsAiResponding] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Notes State
+  // Notes State (legacy - keeping for backward compatibility)
   const [notes, setNotes] = useState('');
+  
+  // New notes system
+  const [allNotes, setAllNotes] = useState<Note[]>([]);
+  const [annotationDialogOpen, setAnnotationDialogOpen] = useState(false);
+  const [pendingAnnotation, setPendingAnnotation] = useState<{
+    quote: string;
+    pageRects: Rect[];
+  } | null>(null);
 
   // Hydration tracking
   const hydrationSentRef = useRef(false);
@@ -248,7 +260,7 @@ export default function PaperPage() {
     initConversation();
   }, [paperId, user, loadConversations, loadConversationMessages]);
 
-  // Load notes from localStorage (per-user)
+  // Load notes from localStorage (per-user) - legacy
   useEffect(() => {
     if (paperId && isAuthed && user) {
       const savedNotes = localStorage.getItem(`notes-${paperId}-${user.uid}`);
@@ -258,12 +270,23 @@ export default function PaperPage() {
     }
   }, [paperId, isAuthed, user]);
 
-  // Save notes to localStorage (per-user)
+  // Save notes to localStorage (per-user) - legacy
   useEffect(() => {
     if (paperId && isAuthed && user && notes) {
       localStorage.setItem(`notes-${paperId}-${user.uid}`, notes);
     }
   }, [paperId, notes, isAuthed, user]);
+
+  // Subscribe to notes from Firestore
+  useEffect(() => {
+    if (!user || !paperId) return;
+
+    const unsubscribe = subscribeToNotes(user.uid, paperId, (loadedNotes) => {
+      setAllNotes(loadedNotes);
+    });
+
+    return () => unsubscribe();
+  }, [user, paperId]);
 
   function onDocumentLoadSuccess({ numPages: nextNumPages }: { numPages: number }): void {
     setNumPages(nextNumPages);
@@ -314,6 +337,64 @@ export default function PaperPage() {
   const handleSwitchConversation = async (convId: string) => {
     setConversationId(convId);
     await loadConversationMessages(convId);
+  };
+
+  const handleTextSelected = (selection: {
+    text: string;
+    pageNumber: number;
+    rects: Array<{ x: number; y: number; width: number; height: number }>;
+  }) => {
+    if (!user) return;
+
+    const pageRects: Rect[] = selection.rects.map((rect) => ({
+      pageNumber: selection.pageNumber,
+      ...rect,
+    }));
+
+    setPendingAnnotation({
+      quote: selection.text,
+      pageRects,
+    });
+    setAnnotationDialogOpen(true);
+  };
+
+  const handleSaveAnnotation = async (content: string, color: string) => {
+    if (!user || !pendingAnnotation) return;
+
+    await addAnnotationNote(user.uid, paperId, {
+      content,
+      quote: pendingAnnotation.quote,
+      color,
+      pageRects: pendingAnnotation.pageRects,
+      anchors: {
+        exact: pendingAnnotation.quote,
+      },
+    });
+
+    setPendingAnnotation(null);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const handleJumpToHighlight = (note: Note) => {
+    if (note.type !== 'annotation' || !note.annotation?.pageRects?.[0]) return;
+
+    const pageNumber = note.annotation.pageRects[0].pageNumber;
+    const pageElement = document.querySelector(`[data-page-number="${pageNumber}"]`);
+    
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleHighlightClick = (note: Note) => {
+    const noteElement = document.getElementById(`note-${note.id}`);
+    if (noteElement) {
+      noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      noteElement.classList.add('ring-2', 'ring-primary');
+      setTimeout(() => {
+        noteElement.classList.remove('ring-2', 'ring-primary');
+      }, 2000);
+    }
   };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -433,6 +514,9 @@ export default function PaperPage() {
                       );
                       setNumPages(null);
                     }}
+                    notes={allNotes}
+                    onHighlightClick={handleHighlightClick}
+                    onTextSelected={isAuthed ? handleTextSelected : undefined}
                   />
                 </div>
               )}
@@ -598,21 +682,7 @@ export default function PaperPage() {
               {!isAuthed ? (
                 <PleaseLogin feature="Notes" />
               ) : (
-                <>
-                  <div className="p-3 border-b">
-                    <h2 className="font-semibold">Private Notes</h2>
-                    <p className="text-xs text-muted-foreground">Your notes are saved locally</p>
-                  </div>
-
-                  <div className="flex-1 p-3">
-                    <Textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Take notes about this paper..."
-                      className="h-full resize-none"
-                    />
-                  </div>
-                </>
+                <NotesTab paperId={paperId} onJumpToHighlight={handleJumpToHighlight} />
               )}
             </TabsContent>
 
@@ -658,6 +728,17 @@ export default function PaperPage() {
           </Tabs>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      {/* Annotation Dialog */}
+      {pendingAnnotation && (
+        <NewAnnotationDialog
+          open={annotationDialogOpen}
+          onOpenChange={setAnnotationDialogOpen}
+          quote={pendingAnnotation.quote}
+          pageRects={pendingAnnotation.pageRects}
+          onSave={handleSaveAnnotation}
+        />
+      )}
     </div>
   );
 }

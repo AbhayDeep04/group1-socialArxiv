@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Existing conversations rules
+    match /conversations/{conversationId} {
+      allow read, write: if isSignedIn();
+      
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // Notes are private and nested by user and paper
+    match /users/{userId}/papers/{paperId}/notes/{noteId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && request.resource.data.userId == userId
+        && request.resource.data.paperId == paperId
+        && request.resource.data.type in ['general', 'annotation']
+        && request.resource.data.content is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && (request.resource.data.type == 'general'
+            || (
+                 request.resource.data.annotation is map
+              && request.resource.data.annotation.quote is string
+              && request.resource.data.annotation.color is string
+              && request.resource.data.annotation.pageRects is list
+            ));
+
+      allow update: if isOwner(userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.paperId == resource.data.paperId
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if isOwner(userId);
+    }
+  }
+}
