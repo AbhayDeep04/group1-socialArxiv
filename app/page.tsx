@@ -47,26 +47,40 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true); // Loading state
   const [error, setError] = useState<string | null>(null); // Error state
   const [isSearching, setIsSearching] = useState(false); // State for search loading
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const papersPerPage = 20;
 
 
   // --- Function to Fetch Papers (Used for Initial Load and Search) ---
-  const fetchPapers = async (query = '*') => { // Default to '*' for initial load
-      setIsLoading(query === '*'); // Only show initial loading spinner
-      setIsSearching(query !== '*'); // Show searching indicator
+  const fetchPapers = async (query = '*', page = 1) => { // Default to '*' for initial load
+      setIsLoading(query === '*' && page === 1); // Only show initial loading spinner
+      setIsSearching(query !== '*' || page > 1); // Show searching indicator
       setError(null);
       try {
-          // *** Use the API route ***
-          const response = await fetch(`/api/papers/search?q=${encodeURIComponent(query)}`); //
-          if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.message || `API request failed with status ${response.status}`);
-          }
-          const fetchedPapers: PaperDocument[] = await response.json(); //
+          // Use Typesense directly with pagination
+          const searchParameters = {
+              q: query,
+              query_by: 'title,abstract,authors',
+              per_page: papersPerPage,
+              page: page,
+          };
+
+          const searchResults = await typesenseClient
+              .collections('papers')
+              .documents()
+              .search(searchParameters);
+
+          const fetchedPapers: PaperDocument[] = searchResults.hits?.map((hit: any) => hit.document) || [];
+          const totalFound = searchResults.found || 0;
+          const calculatedTotalPages = Math.ceil(totalFound / papersPerPage);
 
           setPapers(fetchedPapers);
+          setTotalPages(calculatedTotalPages);
+          setCurrentPage(page);
+
           if (fetchedPapers.length === 0 && query !== '*') {
              console.log(`No results found for "${query}"`);
-             // Optionally set a "no results" state/message here
           }
 
       } catch (err: any) {
@@ -96,11 +110,19 @@ export default function HomePage() {
   // --- Handle Search Form Submission ---
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setCurrentPage(1); // Reset to first page on new search
     if (!searchTerm.trim()) {
         fetchPapers(); // If search is cleared, fetch initial papers again
         return;
     }
-    fetchPapers(searchTerm); // Fetch papers based on the search term
+    fetchPapers(searchTerm, 1); // Fetch papers based on the search term
+  };
+
+  // --- Handle Page Change ---
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    fetchPapers(searchTerm || '*', newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -169,6 +191,62 @@ export default function HomePage() {
         )}
         {/* Show searching indicator separate from initial load */}
          {isSearching && !isLoading && <p>Searching...</p>}
+
+        {/* Pagination Controls */}
+        {!isLoading && !error && papers.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1 || isSearching}
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {currentPage > 2 && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => handlePageChange(1)}>
+                    1
+                  </Button>
+                  {currentPage > 3 && <span className="px-2">...</span>}
+                </>
+              )}
+              {currentPage > 1 && (
+                <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)}>
+                  {currentPage - 1}
+                </Button>
+              )}
+              <Button variant="default" size="sm" disabled>
+                {currentPage}
+              </Button>
+              {currentPage < totalPages && (
+                <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)}>
+                  {currentPage + 1}
+                </Button>
+              )}
+              {currentPage < totalPages - 1 && (
+                <>
+                  {currentPage < totalPages - 2 && <span className="px-2">...</span>}
+                  <Button variant="outline" size="sm" onClick={() => handlePageChange(totalPages)}>
+                    {totalPages}
+                  </Button>
+                </>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages || isSearching}
+            >
+              Next
+            </Button>
+            <span className="text-sm text-muted-foreground ml-2">
+              Page {currentPage} of {totalPages}
+            </span>
+          </div>
+        )}
       </main>
 
       <footer className="border-t bg-background px-4 py-2 text-center text-xs text-muted-foreground sm:px-6">

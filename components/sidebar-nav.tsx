@@ -33,9 +33,9 @@ export function SidebarNav() {
   };
 
   return (
-    <aside className="w-14 shrink-0 border-r bg-background">
+    <aside className="w-14 shrink-0 border-r bg-background sticky top-0 h-screen">
       <TooltipProvider delayDuration={150}>
-        <nav className="flex h-svh flex-col items-center justify-between py-3">
+        <nav className="flex h-full flex-col items-center justify-between py-3">
           <div className="flex flex-col items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
