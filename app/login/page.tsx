@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import Image from 'next/image';
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,18 +40,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Card className="mx-auto max-w-sm">
-        <CardHeader>
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 dark:bg-gray-900">
+      <Card className="w-full max-w-sm bg-gray-700 text-gray-100">
+        <CardHeader className='flex flex-col items-center'>
+          <Image 
+          src="/CSPlogo.png"
+          alt="Social arXiv Logo"
+          width={200}
+          height={200}
+          className='object-contain'/>
           <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
+          <CardDescription className='text-gray-400'>
             Enter your email below to login to your account
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}> {/* Add form tag and onSubmit */}
             <div className="grid gap-4">
-              <div className="grid gap-2">
+              <div className="grid gap-2 text-gray-100">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
@@ -61,7 +69,7 @@ export default function LoginPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <div className="flex items-center">
+                <div className="flex items-center text-gray-100">
                   <Label htmlFor="password">Password</Label>
                   {/* Optional: Add Forgot password link later */}
                   {/* <Link href="#" className="ml-auto inline-block text-sm underline">
@@ -71,12 +79,13 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
+                  placeholder='*****'
                   required
                   value={password} // Add value prop
                   onChange={(e) => setPassword(e.target.value)} // Add onChange handler
                 />
               </div>
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full font-bold hover:bg-gray-900">
                 Login
               </Button>
               {/* Optional: Add OAuth buttons later */}
@@ -89,7 +98,7 @@ export default function LoginPage() {
           {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
           <div className="mt-4 text-center text-sm">
             Don&apos;t have an account?{" "}
-            <Link href="/register" className="underline">
+            <Link href="/register" className="hover:underline text-blue-500">
               Sign up
             </Link>
           </div>

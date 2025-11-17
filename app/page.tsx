@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig'; // adjust this path if needed
-
+import Image from 'next/image';
 // Remove Firestore imports if still present
 // import { db } from '@/lib/firebaseConfig';
 // import { collection, getDocs, query, limit } from "firebase/firestore";
@@ -114,10 +114,16 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-10 border-b bg-background px-4 py-2 sm:px-6">
+    <div className="flex flex-col min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-900 text-gray-100">
+
+      <header className="sticky top-0 z-10 border-b border-gray-800 bg-gray-950/90 bg-background px-4 py-2 sm:px-6 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-xl font-semibold whitespace-nowrap">Social arXiv Demo</h1>
+          <Image
+          src="/CSPlogo.png"
+          alt='Social arXiv logo'
+          width={80}
+          height={80}
+          className='object-contain' />
           <form onSubmit={handleSearch} className="relative flex-1 max-w-xl">
             <Input
               type="search"
@@ -131,7 +137,7 @@ export default function HomePage() {
               {isSearching ? 'Searching...' : 'Search'}
             </Button>
           </form>
-          <div className="flex items-center gap-2 whitespace-nowrap">
+          <div className="flex items-center gap-2 whitespace-nowrap text-gray-900">
             {user ? (
               <>
                 <span className="text-sm text-muted-foreground">Hi, {user.email}</span>
@@ -145,17 +151,16 @@ export default function HomePage() {
               </>
             ) : (
               <>
-              <Link href="/login">
-                <Button variant="outline" size="sm">Login</Button>
-              </Link>
-              <Link href="/register">
-                <Button size="sm">Register</Button>
-              </Link>
+            <Link href="/login">
+              <Button variant="outline" size="sm">Login</Button>
+            </Link>
+            <Link href="/register">
+              <Button size="sm">Register</Button>
+            </Link>
               </>
             )}
           </div>
         </div>
-
       </header>
 
       <main className="flex-1 p-4 sm:p-6">
@@ -193,7 +198,7 @@ export default function HomePage() {
          {isSearching && !isLoading && <p>Searching...</p>}
       </main>
 
-      <footer className="border-t bg-background px-4 py-2 text-center text-xs text-muted-foreground sm:px-6">
+      <footer className="border-t border-gray-800 bg-gray-950/90 px-4 py-2 text-center text-xs text-muted-foreground sm:px-6">
         Social ArXiv Demo Project
       </footer>
     </div>

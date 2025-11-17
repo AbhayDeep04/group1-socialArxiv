@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import Image from "next/image";
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,11 +63,17 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Card className="mx-auto max-w-sm">
-        <CardHeader>
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 dark:bg-gray-900">
+      <Card className="w-full max-w-sm bg-gray-700 text-gray-100">
+        <CardHeader className="flex flex-col items-center">
+          <Image
+          src="/CSPlogo.png"
+          alt="Social arXiv Logo"
+          width={200}
+          height={200}
+          className="object-contain"/>
           <CardTitle className="text-xl">Sign Up</CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-400">
             Enter your information to create an account
           </CardDescription>
         </CardHeader>
@@ -100,6 +107,7 @@ export default function RegisterPage() {
                 <Input
                   id="password"
                   type="password"
+                  placeholder="*****"
                   required
                   value={password} // Add value prop
                   onChange={(e) => setPassword(e.target.value)} // Add onChange handler
@@ -110,7 +118,7 @@ export default function RegisterPage() {
                 <Label htmlFor="confirm-password">Confirm Password</Label>
                 <Input id="confirm-password" type="password" required/>
               </div> */}
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full hover:gray-900 font-bold">
                 Create an account
               </Button>
                {/* Optional: Add OAuth later */}
@@ -123,7 +131,7 @@ export default function RegisterPage() {
           {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
           <div className="mt-4 text-center text-sm">
             Already have an account?{" "}
-            <Link href="/login" className="underline">
+            <Link href="/login" className="hover:underline text-blue-500">
               Sign in
             </Link>
           </div>
