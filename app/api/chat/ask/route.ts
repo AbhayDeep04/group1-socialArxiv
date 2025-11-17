@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // --- Configuration ---
-const qdrantCollectionName = 'paper_chunks';
+const qdrantCollectionName = 'paper_semantics';
 
 // --- Initialize Clients ---
 const qdrantClient = new QdrantClient({

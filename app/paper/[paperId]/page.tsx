@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 
 import {
   ResizableHandle,
@@ -16,10 +17,6 @@ import { Conversation } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Textarea } from '@/components/ui/textarea';
 
-import { pdfjs, Document, Page } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
-
 import { ChatMessage, Source } from '@/lib/types';
 import { ZoomIn, ZoomOut, Plus, MessageSquare, History } from 'lucide-react';
 import {
@@ -30,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth-context';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
 interface PaperMetadata {
   title?: string;
@@ -81,6 +78,9 @@ export default function PaperPage() {
 
   // Notes State
   const [notes, setNotes] = useState('');
+
+  // Hydration tracking
+  const hydrationSentRef = useRef(false);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -138,6 +138,23 @@ export default function PaperPage() {
 
     fetchMetadata();
   }, [paperId]);
+
+  // Trigger background hydration once metadata loads
+  useEffect(() => {
+    if (!paperId || !metadata || hydrationSentRef.current) return;
+    hydrationSentRef.current = true;
+
+    const pdfUrlForHydration =
+      metadata.pdfUrl && metadata.pdfUrl.startsWith('http') ? metadata.pdfUrl : undefined;
+
+    fetch(`/api/papers/${paperId}/hydrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfUrl: pdfUrlForHydration }),
+    }).catch((err) => {
+      console.warn('Hydration trigger failed:', err);
+    });
+  }, [paperId, metadata]);
 
   // Load all conversations for this paper
   const loadConversations = useCallback(async () => {
@@ -392,34 +409,21 @@ export default function PaperPage() {
                 <p className="text-red-600 text-sm p-4">{error}</p>
               ) : (
                 <div className="flex justify-center py-4">
-                  <Document
-                    file={metadata.pdfUrl}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    onLoadError={(pdfError) => {
+                  <PDFViewer
+                    file={`/api/papers/${paperId}/pdf`}
+                    isDark={isDark}
+                    pdfWidth={pdfWidth}
+                    zoom={zoom}
+                    numPages={numPages}
+                    onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                    onLoadError={(pdfError: any) => {
                       console.error('PDF Load Error:', pdfError);
                       setError(
-                        `Failed to load PDF: ${pdfError.message}. Check if the file exists at ${metadata.pdfUrl}`
+                        `Failed to load PDF: ${pdfError.message}. Source: /api/papers/${paperId}/pdf`
                       );
                       setNumPages(null);
                     }}
-                    loading={
-                      <div className="flex items-center justify-center h-full">
-                        <p>Loading PDF...</p>
-                      </div>
-                    }
-                  >
-                    {numPages &&
-                      Array.from(new Array(numPages), (el, index) => (
-                        <div key={`page_${index + 1}`} className={`shadow-lg mb-4 ${isDark ? 'invert' : ''}`}>
-                          <Page
-                            pageNumber={index + 1}
-                            renderTextLayer={true}
-                            renderAnnotationLayer={false}
-                            width={pdfWidth * zoom}
-                          />
-                        </div>
-                      ))}
-                  </Document>
+                  />
                 </div>
               )}
             </div>

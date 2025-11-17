@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "jest --watch"
+    "test": "jest --watch",
+    "harvest:kaggle": "node scripts/harvest_cs_metadata.mjs kaggle",
+    "harvest:oai": "node scripts/harvest_cs_metadata.mjs oai",
+    "hydrate": "node scripts/hydrate_fulltext.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.33",
@@ -51,7 +54,8 @@
     "tailwind-merge": "^3.3.1",
     "typesense": "^2.1.0",
     "use-stick-to-bottom": "^1.1.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
