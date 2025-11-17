@@ -139,7 +139,7 @@ export default function PaperPage() {
     fetchMetadata();
   }, [paperId]);
 
-  // Trigger background hydration once metadata loads
+  // Trigger hydration once metadata loads (don't await - fire and forget)
   useEffect(() => {
     if (!paperId || !metadata || hydrationSentRef.current) return;
     hydrationSentRef.current = true;
@@ -147,13 +147,23 @@ export default function PaperPage() {
     const pdfUrlForHydration =
       metadata.pdfUrl && metadata.pdfUrl.startsWith('http') ? metadata.pdfUrl : undefined;
 
+    // Fire and forget - hydration runs in background
     fetch(`/api/papers/${paperId}/hydrate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pdfUrl: pdfUrlForHydration }),
-    }).catch((err) => {
-      console.warn('Hydration trigger failed:', err);
-    });
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && !data.cached) {
+          console.log(`Hydration started for ${paperId}, will complete in ~10-20 seconds`);
+        } else if (data.cached) {
+          console.log(`Paper ${paperId} already hydrated`);
+        }
+      })
+      .catch((err) => {
+        console.warn('Hydration trigger failed:', err);
+      });
   }, [paperId, metadata]);
 
   // Load all conversations for this paper
