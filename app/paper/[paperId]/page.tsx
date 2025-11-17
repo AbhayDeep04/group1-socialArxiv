@@ -31,6 +31,7 @@ import { NewAnnotationDialog } from '@/components/notes/NewAnnotationDialog';
 import { Note, Rect } from '@/lib/types/note';
 import { addAnnotationNote, subscribeToNotes } from '@/lib/db/notes';
 import { CommentsSection } from '@/components/comments/CommentsSection';
+import { SimilarPapersTab } from '@/components/similar/SimilarPapersTab';
 
 const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
@@ -706,9 +707,7 @@ export default function PaperPage() {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4">
-                    <div className="flex items-center justify-center h-full">
-                      <p className="text-sm text-muted-foreground">Similar papers feature coming soon...</p>
-                    </div>
+                    <SimilarPapersTab paperId={paperId} />
                   </div>
                 </>
               )}
