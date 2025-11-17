@@ -18,7 +18,13 @@ import { Message, MessageContent, MessageResponse } from '@/components/ai-elemen
 import { Textarea } from '@/components/ui/textarea';
 
 import { ChatMessage, Source } from '@/lib/types';
-import { ZoomIn, ZoomOut, Plus, MessageSquare, History } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,9 +35,16 @@ import { useAuth } from '@/lib/auth-context';
 import { NotesTab } from '@/components/notes/NotesTab';
 import { NewAnnotationDialog } from '@/components/notes/NewAnnotationDialog';
 import { Note, Rect } from '@/lib/types/note';
-import { addAnnotationNote, subscribeToNotes } from '@/lib/db/notes';
+import { addAnnotationNote, subscribeToNotes, addGeneralNote } from '@/lib/db/notes';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { SimilarPapersTab } from '@/components/similar/SimilarPapersTab';
+import {
+  AudioPlayerProvider,
+  AudioPlayerButton,
+  AudioPlayerProgress,
+  AudioPlayerTime,
+  AudioPlayerDuration,
+} from '@/components/ui/audio-player';
 
 const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
@@ -92,6 +105,15 @@ export default function PaperPage() {
     quote: string;
     pageRects: Rect[];
   } | null>(null);
+
+  // AI Summary State
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [isSavingSummary, setIsSavingSummary] = useState(false);
+
+  // TTS State (ElevenLabs)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
 
   // Hydration tracking
   const hydrationSentRef = useRef(false);
@@ -452,6 +474,80 @@ export default function PaperPage() {
     }
   };
 
+  // AI Summary handlers
+  const handleGenerateSummary = async () => {
+    if (!user) return;
+    try {
+      setIsSummarizing(true);
+      setSummaryText(null);
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/papers/${paperId}/summary`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate summary');
+      }
+
+      const { summary } = await response.json();
+      setSummaryText(summary);
+    } catch (error: any) {
+      console.error('Error generating summary:', error);
+      setSummaryText('Failed to generate summary. Please try again.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleSaveSummary = async () => {
+    if (!user || !summaryText) return;
+    setIsSavingSummary(true);
+    try {
+      await addGeneralNote(user.uid, paperId, {
+        content: `# AI-Generated Summary\n\n${summaryText}`,
+      });
+      setSummaryText(null);
+    } catch (error) {
+      console.error('Error saving summary:', error);
+    } finally {
+      setIsSavingSummary(false);
+    }
+  };
+
+  // TTS handler (ElevenLabs)
+  const handleListen = async () => {
+    if (audioUrl) return;
+    try {
+      setIsGeneratingAudio(true);
+      const response = await fetch(`/api/papers/${paperId}/audio`);
+      if (!response.ok) {
+        throw new Error('Failed to generate audio');
+      }
+      const blob = await response.blob();
+      console.log('Audio blob received:', {
+        type: blob.type,
+        size: blob.size,
+        sizeKB: (blob.size / 1024).toFixed(2) + ' KB',
+      });
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+    } catch (error: any) {
+      console.error('Error generating audio:', error);
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
+
   if (isLoading) return <div className="p-4">Loading paper...</div>;
   if (error && !error.startsWith('Failed to load PDF'))
     return (
@@ -482,16 +578,112 @@ export default function PaperPage() {
         <ResizablePanel defaultSize={60} onResize={updatePdfWidth}>
           <div className="h-full flex flex-col">
             {/* PDF Controls */}
-            <div className="flex items-center justify-center gap-2 h-12 border-b bg-background">
-              <Button onClick={handleZoomOut} size="sm" variant="outline">
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground min-w-[60px] text-center">
-                {Math.round(zoom * 100)}%
-              </span>
-              <Button onClick={handleZoomIn} size="sm" variant="outline">
-                <ZoomIn className="h-4 w-4" />
-              </Button>
+            <div className="flex items-center justify-center h-12 border-b bg-background relative px-3 gap-2">
+              <TooltipProvider>
+                {/* AI Summary - directly left of zoom out */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      disabled={!isAuthed || isSummarizing}
+                      onClick={handleGenerateSummary}
+                      className="h-8 w-8"
+                    >
+                      {isSummarizing ? (
+                        <span className="animate-pulse">
+                          <Sparkles className="h-4 w-4" />
+                        </span>
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isSummarizing ? 'Generating summary...' : 'AI Summary'}</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                {/* Zoom controls */}
+                <Button onClick={handleZoomOut} size="sm" variant="outline">
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground min-w-[60px] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button onClick={handleZoomIn} size="sm" variant="outline">
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+
+                {/* Listen / Audio Player - directly right of zoom in */}
+                {!audioUrl ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        disabled={!isAuthed || isGeneratingAudio}
+                        onClick={handleListen}
+                        className="h-8 w-8"
+                      >
+                        {isGeneratingAudio ? (
+                          <span className="animate-pulse">
+                            <Headphones className="h-4 w-4" />
+                          </span>
+                        ) : (
+                          <Headphones className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isGeneratingAudio ? 'Generating audio...' : 'Audio Generation'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <AudioPlayerProvider>
+                    <div className="flex items-center gap-2">
+                      <AudioPlayerButton
+                        size="sm"
+                        item={{
+                          id: `paper-${paperId}`,
+                          src: audioUrl,
+                          data: { title: metadata?.title || 'Paper Audio' },
+                        }}
+                      />
+                      <AudioPlayerProgress className="w-32" />
+                      <AudioPlayerTime className="text-xs" />
+                    </div>
+                  </AudioPlayerProvider>
+                )}
+              </TooltipProvider>
+
+              {/* Summary Popup */}
+              {summaryText && (
+                <div className="absolute top-12 left-1/2 -translate-x-1/2 z-10 rounded border bg-popover p-4 shadow-lg max-w-2xl max-h-96 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-sm">AI-Generated Summary</h3>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSummaryText(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap mb-3">{summaryText}</div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveSummary}
+                      disabled={isSavingSummary}
+                      className="gap-1"
+                    >
+                      <Save className="h-4 w-4" />
+                      {isSavingSummary ? 'Saving...' : 'Save to Notes'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div
