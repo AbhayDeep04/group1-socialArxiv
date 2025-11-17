@@ -18,7 +18,7 @@ import { Message, MessageContent, MessageResponse } from '@/components/ai-elemen
 import { Textarea } from '@/components/ui/textarea';
 
 import { ChatMessage, Source } from '@/lib/types';
-import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark, Star } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark, Star, ExternalLink } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +38,7 @@ import { Note, Rect } from '@/lib/types/note';
 import { addAnnotationNote, subscribeToNotes, addGeneralNote } from '@/lib/db/notes';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { SimilarPapersTab } from '@/components/similar/SimilarPapersTab';
+import { ReferencesTab } from '@/components/references/ReferencesTab';
 import { toggleBookmark, subscribeToBookmark } from '@/lib/firestore/bookmarks';
 import {
   AudioPlayerProvider,
@@ -635,7 +636,24 @@ export default function PaperPage() {
             {/* PDF Controls */}
             <div className="flex items-center justify-center h-12 border-b bg-background relative px-3 gap-2">
               <TooltipProvider>
-                {/* Bookmark button - far left */}
+                {/* Open on arXiv button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => window.open(`https://arxiv.org/abs/${paperId.replace(/^arxiv[-:]?/i, '')}`, '_blank')}
+                      className="h-8 w-8"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Open on arXiv</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                {/* Bookmark button */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -804,11 +822,12 @@ export default function PaperPage() {
         {/* Right Panel: Tabbed Interface */}
         <ResizablePanel defaultSize={40} onResize={updatePdfWidth}>
           <Tabs defaultValue="chat" className="h-full flex flex-col gap-0">
-            <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-background h-12 p-0">
+            <TabsList className="grid w-full grid-cols-5 rounded-none border-b bg-background h-12 p-0">
               <TabsTrigger value="chat" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Chat</TabsTrigger>
               <TabsTrigger value="notes" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Notes</TabsTrigger>
               <TabsTrigger value="comments" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Comments</TabsTrigger>
               <TabsTrigger value="similar" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Similar</TabsTrigger>
+              <TabsTrigger value="references" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">References</TabsTrigger>
             </TabsList>
 
             {/* Chat Tab */}
@@ -981,6 +1000,24 @@ export default function PaperPage() {
 
                   <div className="flex-1 overflow-y-auto p-4">
                     <SimilarPapersTab paperId={paperId} />
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            {/* References Tab */}
+            <TabsContent value="references" className="flex-1 flex flex-col mt-0 overflow-hidden">
+              {!isAuthed ? (
+                <PleaseLogin feature="References" />
+              ) : (
+                <>
+                  <div className="p-3 border-b">
+                    <h2 className="font-semibold">References</h2>
+                    <p className="text-xs text-muted-foreground">Papers cited in this work</p>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <ReferencesTab paperId={paperId} />
                   </div>
                 </>
               )}
