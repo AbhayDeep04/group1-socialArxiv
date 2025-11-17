@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import Link from 'next/link';
 
 import {
@@ -40,6 +41,8 @@ export default function PaperPage() {
   const params = useParams();
   const paperId = params.paperId as string;
   const { user } = useAuth();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const [metadata, setMetadata] = useState<PaperMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -340,9 +343,7 @@ export default function PaperPage() {
     <div className="h-screen flex flex-col">
       {/* Header */}
       <header className="border-b p-2 px-4 flex items-center justify-between">
-        <Link href="/" className="text-sm underline">
-          &lt; Back to Search
-        </Link>
+        <div>{/* Placeholder for other controls */}</div>
         <h1 className="text-lg font-semibold truncate px-4">
           {metadata.title || `Paper ${paperId}`}
         </h1>
@@ -354,7 +355,7 @@ export default function PaperPage() {
         <ResizablePanel defaultSize={60} onResize={updatePdfWidth}>
           <div className="h-full flex flex-col">
             {/* PDF Controls */}
-            <div className="flex items-center justify-center gap-2 p-2 border-b bg-gray-50">
+            <div className="flex items-center justify-center gap-2 h-12 border-b bg-background">
               <Button onClick={handleZoomOut} size="sm" variant="outline">
                 <ZoomOut className="h-4 w-4" />
               </Button>
@@ -368,7 +369,7 @@ export default function PaperPage() {
 
             <div
               ref={pdfContainerRef}
-              className="flex-1 overflow-y-auto bg-gray-100"
+              className="flex-1 overflow-y-auto bg-muted"
             >
               {error && error.startsWith('Failed to load PDF') ? (
                 <p className="text-red-600 text-sm p-4">{error}</p>
@@ -392,7 +393,7 @@ export default function PaperPage() {
                   >
                     {numPages &&
                       Array.from(new Array(numPages), (el, index) => (
-                        <div key={`page_${index + 1}`} className="bg-white">
+                        <div key={`page_${index + 1}`} className={`shadow-lg mb-4 ${isDark ? 'invert' : ''}`}>
                           <Page
                             pageNumber={index + 1}
                             renderTextLayer={true}
@@ -412,12 +413,12 @@ export default function PaperPage() {
 
         {/* Right Panel: Tabbed Interface */}
         <ResizablePanel defaultSize={40} onResize={updatePdfWidth}>
-          <Tabs defaultValue="chat" className="h-full flex flex-col">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="chat">Chat</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="similar">Similar</TabsTrigger>
+          <Tabs defaultValue="chat" className="h-full flex flex-col gap-0">
+            <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-background h-12 p-0">
+              <TabsTrigger value="chat" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Chat</TabsTrigger>
+              <TabsTrigger value="notes" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Notes</TabsTrigger>
+              <TabsTrigger value="comments" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Comments</TabsTrigger>
+              <TabsTrigger value="similar" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Similar</TabsTrigger>
             </TabsList>
 
             {/* Chat Tab */}
