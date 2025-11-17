@@ -18,7 +18,7 @@ import { Message, MessageContent, MessageResponse } from '@/components/ai-elemen
 import { Textarea } from '@/components/ui/textarea';
 
 import { ChatMessage, Source } from '@/lib/types';
-import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark, Star } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -46,6 +46,8 @@ import {
   AudioPlayerTime,
   AudioPlayerDuration,
 } from '@/components/ui/audio-player';
+import { subscribeToUserRating, submitRating } from '@/lib/db/ratings';
+import { RatingPopover } from '@/components/ratings/RatingPopover';
 
 const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
@@ -118,6 +120,9 @@ export default function PaperPage() {
 
   // Bookmark State
   const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Rating State
+  const [userRating, setUserRating] = useState<number | null>(null);
 
   // Hydration tracking
   const hydrationSentRef = useRef(false);
@@ -225,6 +230,30 @@ export default function PaperPage() {
       await toggleBookmark(user.uid, paperId);
     } catch (error) {
       console.error('Error toggling bookmark:', error);
+    }
+  };
+
+  // Subscribe to user rating
+  useEffect(() => {
+    if (!user || !paperId) return;
+
+    const unsubscribe = subscribeToUserRating(user.uid, paperId, (rating) => {
+      setUserRating(rating?.value ?? null);
+    });
+
+    return () => unsubscribe();
+  }, [user, paperId]);
+
+  // Handle rating submission
+  const handleRate = async (value: number) => {
+    if (!user) return;
+    
+    try {
+      const idToken = await user.getIdToken();
+      await submitRating(paperId, value, idToken);
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+      throw error;
     }
   };
 
@@ -659,7 +688,15 @@ export default function PaperPage() {
                   <ZoomIn className="h-4 w-4" />
                 </Button>
 
-                {/* Listen / Audio Player - directly right of zoom in */}
+                {/* Rating button */}
+                <RatingPopover
+                  paperId={paperId}
+                  currentRating={userRating}
+                  disabled={!isAuthed}
+                  onRate={handleRate}
+                />
+
+                {/* Listen / Audio Player - directly right of rating */}
                 {!audioUrl ? (
                   <Tooltip>
                     <TooltipTrigger asChild>

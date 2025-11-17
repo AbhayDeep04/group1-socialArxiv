@@ -93,5 +93,21 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+
+    // User ratings - user can read/write their own ratings
+    match /users/{userId}/ratings/{paperId} {
+      allow read, create, update, delete: if isOwner(userId)
+        && (request.method in ['create', 'update'] 
+            ? (request.resource.data.value in [1, 2, 3, 4, 5]
+               && request.resource.data.updatedAt is timestamp
+               && (request.method == 'create' ? request.resource.data.createdAt is timestamp : true))
+            : true);
+    }
+
+    // Paper rating aggregates - read-only for clients, writes via API
+    match /papers/{paperId}/aggregates/{aggId} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }

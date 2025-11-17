@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { useAuth } from '@/lib/auth-context';
+import { fetchRatingAverages, RatingAggregate } from '@/lib/db/ratings';
+import { StarRatingDisplay } from '@/components/ratings/StarRatingDisplay';
 // Remove Firestore imports if still present
 // import { db } from '@/lib/firebaseConfig';
 // import { collection, getDocs, query, limit } from "firebase/firestore";
@@ -50,6 +52,7 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const papersPerPage = 20;
+  const [ratingAverages, setRatingAverages] = useState<Record<string, RatingAggregate | null>>({});
 
 
   // --- Function to Fetch Papers (Used for Initial Load and Search) ---
@@ -81,6 +84,13 @@ export default function HomePage() {
 
           if (fetchedPapers.length === 0 && query !== '*') {
              console.log(`No results found for "${query}"`);
+          }
+
+          // Fetch rating averages for the loaded papers
+          if (fetchedPapers.length > 0) {
+            const paperIds = fetchedPapers.map(p => p.id);
+            const averages = await fetchRatingAverages(paperIds);
+            setRatingAverages(averages);
           }
 
       } catch (err: any) {
@@ -170,15 +180,24 @@ export default function HomePage() {
                 <Link href={`/paper/${paper.id}`} key={paper.id}>
                   <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
                     <CardHeader>
-                      <CardTitle className="text-lg line-clamp-2">{paper.title || `Paper ${paper.id}`}</CardTitle>
-                      <CardDescription className="text-xs"> {/* Opening Tag */}
-                         {(Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) || 'Unknown Authors'} - {paper.year || 'N/A'}
-                      </CardDescription> {/* *** CORRECTED CLOSING TAG *** */}
+                     <CardTitle className="text-lg line-clamp-2">{paper.title || `Paper ${paper.id}`}</CardTitle>
+                     <CardDescription className="text-xs"> {/* Opening Tag */}
+                        {(Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) || 'Unknown Authors'} - {paper.year || 'N/A'}
+                     </CardDescription> {/* *** CORRECTED CLOSING TAG *** */}
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-muted-foreground line-clamp-3">
-                        {paper.abstract || 'No abstract available.'}
-                      </p>
+                     <p className="text-sm text-muted-foreground line-clamp-3">
+                       {paper.abstract || 'No abstract available.'}
+                     </p>
+                     {ratingAverages[paper.id] && (
+                       <div className="mt-2">
+                         <StarRatingDisplay
+                           rating={ratingAverages[paper.id]!.averageRounded}
+                           count={ratingAverages[paper.id]!.count}
+                           size="sm"
+                         />
+                       </div>
+                     )}
                     </CardContent>
                   </Card>
                 </Link>
