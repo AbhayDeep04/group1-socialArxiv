@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { QdrantClient } from '@qdrant/js-client-rest';
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
+import { pipeline } from '@xenova/transformers';
+import { getAdminDb, getAdminAuth } from '@/lib/firebaseAdmin';
+import { Message, Source } from '@/lib/types';
 
 // --- Route Segment Config for Vercel ---
 export const runtime = 'nodejs';
@@ -7,33 +13,24 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // --- Configuration ---
-const qdrantCollectionName = 'paper_chunks'; 
-// Using stable paid model to bypass free tier rate limits
-const llmModelNames = [
-  'openai/gpt-4o-mini', 
-  'google/gemini-2.0-flash', 
-  'mistralai/mistral-7b-instruct', 
-];
-
+const qdrantCollectionName = 'paper_chunks';
+const embeddingModelName = 'Xenova/all-MiniLM-L6-v2';
 
 // --- Initialize Qdrant Client ---
 const qdrantClient = new QdrantClient({
-    url: process.env.QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY,
+  url: process.env.QDRANT_URL,
+  apiKey: process.env.QDRANT_API_KEY,
 });
 
+// --- Singleton Embedding Model ---
+let embedderPromise: any;
 
-// --- Helper Function: Format Chunks into Context String ---
-function formatContext(chunks: any[]): string {
-    if (!chunks || chunks.length === 0) {
-        return "No text data was retrieved for the paper.";
-    }
-    
-    // Sort all chunks by their index to reassemble the document in order
-    chunks.sort((a, b) => (a.payload?.chunkIndex ?? Infinity) - (b.payload?.chunkIndex ?? Infinity));
-    
-    // Concatenate the text of all chunks to pass the entire document text
-    return chunks.map(chunk => chunk.payload?.chunkText || '').join('\n');
+async function getEmbedder() {
+  if (!embedderPromise) {
+    console.log(`Loading embedding model: ${embeddingModelName}...`);
+    embedderPromise = pipeline('feature-extraction', embeddingModelName, { quantized: false });
+  }
+  return embedderPromise;
 }
 
 // --- CORS Headers ---
@@ -48,57 +45,135 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders as any });
 }
 
+// Helper to verify Firebase auth token
+async function verifyAuthToken(request: NextRequest) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+  
+  const token = authHeader.substring(7);
+  try {
+    const auth = getAdminAuth();
+    const decodedToken = await auth.verifyIdToken(token);
+    return decodedToken.uid;
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    return null;
+  }
+}
+
 // --- POST Handler for /api/chat/ask ---
 export async function POST(request: NextRequest) {
   try {
-    const { paperId, message } = await request.json();
-
-    if (!paperId || !message) {
-      return NextResponse.json({ message: 'Missing paperId or message' }, { status: 400 });
+    const userId = await verifyAuthToken(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // --- RAG Step 1 & 2: Bypass Semantic Search, Retrieve ALL Chunks ---
-    console.log(`Retrieving ALL chunks for paper ${paperId} to pass entire document...`);
+    const { conversationId, paperId, message, topK = 6 } = await request.json();
+
+    if (!conversationId || !paperId || !message) {
+      return NextResponse.json(
+        { error: 'Missing conversationId, paperId, or message' },
+        { status: 400 }
+      );
+    }
+
+    // Verify user owns this conversation
+    const db = getAdminDb();
+    const conversationDoc = await db.collection('conversations').doc(conversationId).get();
+    if (!conversationDoc.exists || conversationDoc.data()?.userId !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // --- Step 1: Load conversation history from Firestore ---
+    console.log(`Loading conversation history for ${conversationId}...`);
+    const messagesRef = db
+      .collection('conversations')
+      .doc(conversationId)
+      .collection('messages');
+    const messagesSnapshot = await messagesRef.orderBy('createdAt', 'asc').get();
+
+    const history: Message[] = [];
+    messagesSnapshot.forEach((doc) => {
+      const data = doc.data();
+      history.push({
+        id: doc.id,
+        role: data.role,
+        content: data.content,
+        sources: data.sources || [],
+        createdAt: data.createdAt.toDate(),
+      });
+    });
+
+    console.log(`Loaded ${history.length} messages from conversation history.`);
+
+    // --- Step 2: Save user message to Firestore ---
+    const userMessageRef = await messagesRef.add({
+      role: 'user',
+      content: message,
+      createdAt: new Date(),
+    });
+    console.log(`Saved user message with ID: ${userMessageRef.id}`);
+
+    // --- Step 3: Retrieve ALL chunks for the paper (simple approach) ---
+    console.log(`Retrieving ALL chunks for paper ${paperId}...`);
     
     let allChunks = [];
     let offset;
 
     while (true) {
-        const scrollResponse = await qdrantClient.scroll(qdrantCollectionName, {
-            filter: { 
-                must: [{ key: 'paperId', match: { value: paperId } }]
-            },
-            with_payload: true, 
-            with_vector: false, // <-- FIXED: Changed from 'with_vectors' to 'with_vector'
-            limit: 500, 
-            offset: offset 
-        });
+      const scrollResponse = await qdrantClient.scroll(qdrantCollectionName, {
+        filter: {
+          must: [{ key: 'paperId', match: { value: paperId } }],
+        },
+        with_payload: true,
+        with_vector: false,
+        limit: 500,
+        offset: offset,
+      });
 
-        // --- FIXED: Direct destructuring of properties ---
-        const { points, next_page_offset } = scrollResponse; 
+      const { points, next_page_offset } = scrollResponse;
+      allChunks.push(...points);
+      offset = next_page_offset;
 
-        allChunks.push(...points);
-        offset = next_page_offset; // Use next_page_offset for pagination
-
-        if (offset === null || points.length === 0) {
-            break; 
-        }
+      if (offset === null || points.length === 0) {
+        break;
+      }
     }
 
-    console.log(`Retrieved total of ${allChunks.length} chunks to represent the full paper.`);
+    console.log(`Retrieved ${allChunks.length} chunks from Qdrant.`);
 
-    // 3. Construct the Prompt
-    const context = formatContext(allChunks);
-    const prompt = `You are a meticulous, highly-detailed, and expert AI research assistant. Your primary goal is to provide a comprehensive and exhaustive answer to the user's question by analyzing the ENTIRE document text provided below.
+    // --- Step 4: Sort chunks by index and build full paper context ---
+    allChunks.sort((a: any, b: any) => (a.payload?.chunkIndex ?? 0) - (b.payload?.chunkIndex ?? 0));
+    
+    const paperContext = allChunks
+      .map((chunk: any) => chunk.payload?.chunkText || '')
+      .join('\n');
 
-Instructions:
-1.  Analyze the provided document text in its entirety to find all relevant information.
-2.  Provide a detailed, structured, and complete answer, maximizing the accuracy and depth of information extracted from the text.
-3.  If the information is not explicitly present in the provided document text, your ONLY response must be: "I couldn't find the comprehensive answer in the full document text."
+    console.log(`Paper context length: ${paperContext.length} characters`);
 
-Full Document Text:
+    // Create minimal sources info (just for display)
+    const sources: Source[] = [{
+      index: 1,
+      chunkIndex: 0,
+      score: 1.0,
+      text: `Full paper (${allChunks.length} chunks)`,
+    }];
+
+    // --- Step 5: Build conversation history string ---
+    const historyString = history
+      .slice(-6) // Last 6 messages for context
+      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n');
+
+    // --- Step 6: Construct LLM prompt ---
+    const prompt = `You are a helpful research assistant. Answer the user's question based on the research paper provided below.
+
+${historyString ? `Previous conversation:\n${historyString}\n\n` : ''}Research Paper:
 ---
-${context}
+${paperContext}
 ---
 
 User's Question:
@@ -106,69 +181,75 @@ ${message}
 
 Answer:`;
 
-    console.log(`Prompt constructed. Calling LLM...`);
+    console.log('Calling LLM...');
 
+    // --- Step 7: Call LLM with fallback ---
     let finalAiResponseText = '';
     let success = false;
     let lastError = null;
 
-    // 4. Implement Fallback Loop
-    for (const modelName of llmModelNames) {
-        console.log(`Attempting LLM call with model: ${modelName}`);
+    const models = [
+      { name: 'gpt-4o-mini', provider: openai('gpt-4o-mini') },
+      { name: 'gemini-2.0-flash-exp', provider: google('gemini-2.0-flash-exp') },
+    ];
 
-        const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": `http://localhost:3000`, 
-                "X-Title": `Social ArXiv Demo`, 
-            },
-            body: JSON.stringify({
-                model: modelName,
-                messages: [
-                    { "role": "user", "content": prompt }
-                ],
-                stream: false, 
-                temperature: 0.1, 
-            })
+    for (const { name, provider } of models) {
+      try {
+        console.log(`Attempting LLM call with model: ${name}`);
+
+        const { text } = await generateText({
+          model: provider,
+          prompt: prompt,
+          temperature: 0.1,
+          maxRetries: 0,
         });
 
-        if (openRouterResponse.status === 429) {
-            const errorBody = await openRouterResponse.text();
-            console.warn(`[FALLBACK] Model ${modelName} hit rate limit (429). Trying next model...`);
-            lastError = `Rate limit hit on ${modelName}.`;
-            continue;
-        }
-
-        if (!openRouterResponse.ok) {
-            const errorBody = await openRouterResponse.text();
-            console.error(`[FATAL] Model ${modelName} returned status ${openRouterResponse.status}`, errorBody);
-            lastError = `Model ${modelName} failed with status ${openRouterResponse.status}.`;
-            break; 
-        }
-
-        // Success!
-        const responseData = await openRouterResponse.json();
-        finalAiResponseText = responseData.choices?.[0]?.message?.content?.trim() || "I couldn't find the comprehensive answer in the full document text.";
+        finalAiResponseText = text.trim() || "I couldn't generate a response.";
         success = true;
-        break; 
+        console.log(`Successfully received response from ${name}`);
+        console.log(`Response preview: ${finalAiResponseText.substring(0, 200)}...`);
+        break;
+      } catch (error: any) {
+        console.warn(`[FALLBACK] Model ${name} failed: ${error.message}. Trying next model...`);
+        lastError = `${name} failed: ${error.message}`;
+        continue;
+      }
     }
 
     if (!success) {
-        const errorMsg = finalAiResponseText || lastError || "All LLM models failed to return a valid response.";
-        console.error(`Final LLM Failure: ${errorMsg}`);
-        return NextResponse.json({ response: `System Error: ${errorMsg}` }, { status: 500 });
+      const errorMsg = lastError || 'All LLM models failed to return a valid response.';
+      console.error(`Final LLM Failure: ${errorMsg}`);
+      return NextResponse.json({ error: `System Error: ${errorMsg}` }, { status: 500 });
     }
 
-    console.log('Received final response via Fallback system.');
+    // --- Step 8: Save assistant message to Firestore ---
+    const assistantMessageRef = await messagesRef.add({
+      role: 'assistant',
+      content: finalAiResponseText,
+      sources: sources,
+      createdAt: new Date(),
+    });
+    console.log(`Saved assistant message with ID: ${assistantMessageRef.id}`);
 
-    // 5. Return the final AI response
-    return NextResponse.json({ response: finalAiResponseText }, { status: 200, headers: corsHeaders as any });
+    // --- Step 9: Update conversation updatedAt timestamp ---
+    await db.collection('conversations').doc(conversationId).update({
+      updatedAt: new Date(),
+    });
 
+    // --- Step 10: Return response ---
+    return NextResponse.json(
+      {
+        response: finalAiResponseText,
+        sources: sources,
+      },
+      { status: 200, headers: corsHeaders as any }
+    );
   } catch (error: any) {
     console.error('Error in chat/ask API route:', error);
     const errorMessage = error.message || 'An unknown error occurred';
-    return NextResponse.json({ message: 'Internal Server Error', error: errorMessage }, { status: 500, headers: corsHeaders as any });
+    return NextResponse.json(
+      { error: 'Internal Server Error', message: errorMessage },
+      { status: 500, headers: corsHeaders as any }
+    );
   }
 }

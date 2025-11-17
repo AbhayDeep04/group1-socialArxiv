@@ -15,6 +15,15 @@ TYPESENSE_ADMIN_API_KEY=<typesense-admin-key>
 # qdrant api keys
 QDRANT_URL=<qdrant-endpoint>
 QDRANT_API_KEY=<qdrant-api-key>
+
+# firebase admin (for server-side Firestore access)
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=<your-firebase-project-id>
+FIREBASE_CLIENT_EMAIL=<your-firebase-service-account-email>
+FIREBASE_PRIVATE_KEY=<your-firebase-private-key>
+
+# openai/google ai (for LLM)
+OPENAI_API_KEY=<your-openai-api-key>
+GOOGLE_GENERATIVE_AI_API_KEY=<your-google-ai-api-key>
 ```
 
 Ingest the papers for the demo:
