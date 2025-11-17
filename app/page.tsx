@@ -6,6 +6,9 @@ import Typesense from 'typesense'; // Keep for initial load if preferred, or rem
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth } from '@/lib/firebaseConfig'; // adjust this path if needed
+
 // Remove Firestore imports if still present
 // import { db } from '@/lib/firebaseConfig';
 // import { collection, getDocs, query, limit } from "firebase/firestore";
@@ -45,6 +48,15 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true); // Loading state
   const [error, setError] = useState<string | null>(null); // Error state
   const [isSearching, setIsSearching] = useState(false); // State for search loading
+    // --- Track Firebase User Authentication State ---
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
 
   // --- Function to Fetch Papers (Used for Initial Load and Search) ---
@@ -120,14 +132,30 @@ export default function HomePage() {
             </Button>
           </form>
           <div className="flex items-center gap-2 whitespace-nowrap">
-            <Link href="/login">
-              <Button variant="outline" size="sm">Login</Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm">Register</Button>
-            </Link>
+            {user ? (
+              <>
+                <span className="text-sm text-muted-foreground">Hi, {user.email}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => signOut(auth)}
+                >
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+              <Link href="/login">
+                <Button variant="outline" size="sm">Login</Button>
+              </Link>
+              <Link href="/register">
+                <Button size="sm">Register</Button>
+              </Link>
+              </>
+            )}
           </div>
         </div>
+
       </header>
 
       <main className="flex-1 p-4 sm:p-6">
