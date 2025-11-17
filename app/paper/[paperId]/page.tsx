@@ -37,12 +37,29 @@ interface PaperMetadata {
   pdfUrl?: string;
 }
 
+function PleaseLogin({ feature }: { feature: string }) {
+  return (
+    <div className="flex items-center justify-center h-full p-4 text-center">
+      <div>
+        <p className="text-sm text-muted-foreground mb-3">
+          Please log in to use {feature}.
+        </p>
+        <div className="flex gap-2 justify-center">
+          <Link href="/login"><Button size="sm">Login</Button></Link>
+          <Link href="/register"><Button size="sm" variant="outline">Register</Button></Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PaperPage() {
   const params = useParams();
   const paperId = params.paperId as string;
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const isAuthed = !!user && !authLoading;
 
   const [metadata, setMetadata] = useState<PaperMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -204,22 +221,22 @@ export default function PaperPage() {
     initConversation();
   }, [paperId, user, loadConversations, loadConversationMessages]);
 
-  // Load notes from localStorage
+  // Load notes from localStorage (per-user)
   useEffect(() => {
-    if (paperId) {
-      const savedNotes = localStorage.getItem(`notes-${paperId}`);
+    if (paperId && isAuthed && user) {
+      const savedNotes = localStorage.getItem(`notes-${paperId}-${user.uid}`);
       if (savedNotes) {
         setNotes(savedNotes);
       }
     }
-  }, [paperId]);
+  }, [paperId, isAuthed, user]);
 
-  // Save notes to localStorage
+  // Save notes to localStorage (per-user)
   useEffect(() => {
-    if (paperId && notes) {
-      localStorage.setItem(`notes-${paperId}`, notes);
+    if (paperId && isAuthed && user && notes) {
+      localStorage.setItem(`notes-${paperId}-${user.uid}`, notes);
     }
-  }, [paperId, notes]);
+  }, [paperId, notes, isAuthed, user]);
 
   function onDocumentLoadSuccess({ numPages: nextNumPages }: { numPages: number }): void {
     setNumPages(nextNumPages);
@@ -415,189 +432,214 @@ export default function PaperPage() {
         <ResizablePanel defaultSize={40} onResize={updatePdfWidth}>
           <Tabs defaultValue="chat" className="h-full flex flex-col gap-0">
             <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-background h-12 p-0">
-              <TabsTrigger value="chat" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Chat</TabsTrigger>
-              <TabsTrigger value="notes" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Notes</TabsTrigger>
-              <TabsTrigger value="comments" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Comments</TabsTrigger>
-              <TabsTrigger value="similar" className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Similar</TabsTrigger>
+              <TabsTrigger value="chat" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Chat</TabsTrigger>
+              <TabsTrigger value="notes" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Notes</TabsTrigger>
+              <TabsTrigger value="comments" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Comments</TabsTrigger>
+              <TabsTrigger value="similar" disabled={!isAuthed} className="rounded-none border-0 bg-transparent data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">Similar</TabsTrigger>
             </TabsList>
 
             {/* Chat Tab */}
             <TabsContent value="chat" className="flex-1 flex flex-col mt-0 overflow-hidden">
-              <div className="p-3 border-b flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold">AI Assistant</h2>
-                  <p className="text-xs text-muted-foreground">Ask questions about this paper</p>
-                </div>
-                <div className="flex gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="outline" className="gap-1">
-                        <History className="h-4 w-4" />
-                        History
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
-                      {conversations.length === 0 ? (
-                        <div className="p-4 text-center text-sm text-muted-foreground">
-                          No conversation history
-                        </div>
-                      ) : (
-                        conversations.map((conv) => (
-                          <DropdownMenuItem
-                            key={conv.id}
-                            onClick={() => handleSwitchConversation(conv.id)}
-                            className={`cursor-pointer ${
-                              conversationId === conv.id ? 'bg-accent' : ''
-                            }`}
-                          >
-                            <div className="flex items-start gap-2 w-full">
-                              <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">
-                                  {conv.title}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(conv.updatedAt).toLocaleDateString()}
-                                </p>
-                              </div>
+              {!isAuthed ? (
+                <PleaseLogin feature="Chat" />
+              ) : (
+                <>
+                  <div className="p-3 border-b flex items-center justify-between">
+                    <div>
+                      <h2 className="font-semibold">AI Assistant</h2>
+                      <p className="text-xs text-muted-foreground">Ask questions about this paper</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-1">
+                            <History className="h-4 w-4" />
+                            History
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+                          {conversations.length === 0 ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground">
+                              No conversation history
                             </div>
-                          </DropdownMenuItem>
-                        ))
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  <Button
-                    onClick={handleNewChat}
-                    size="sm"
-                    variant="outline"
-                    className="gap-1"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New Chat
-                  </Button>
-                </div>
-              </div>
-
-              <Conversation className="flex-1 overflow-y-auto p-4">
-                {messages.length === 0 && !isAiResponding && (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-sm text-muted-foreground text-center">
-                      Ask a question about the paper to start chatting.
-                    </p>
+                          ) : (
+                            conversations.map((conv) => (
+                              <DropdownMenuItem
+                                key={conv.id}
+                                onClick={() => handleSwitchConversation(conv.id)}
+                                className={`cursor-pointer ${
+                                  conversationId === conv.id ? 'bg-accent' : ''
+                                }`}
+                              >
+                                <div className="flex items-start gap-2 w-full">
+                                  <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {conv.title}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(conv.updatedAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                              </DropdownMenuItem>
+                            ))
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      
+                      <Button
+                        onClick={handleNewChat}
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        disabled={!isAuthed}
+                      >
+                        <Plus className="h-4 w-4" />
+                        New Chat
+                      </Button>
+                    </div>
                   </div>
-                )}
 
-                {messages.map((msg, index) => (
-                  <Message
-                    key={index}
-                    from={msg.sender === 'user' ? 'user' : 'assistant'}
-                    className="mb-4"
-                  >
-                    {msg.sender === 'ai' ? (
-                      <MessageResponse className="text-sm">{msg.text}</MessageResponse>
-                    ) : (
-                      <MessageContent className="text-sm">{msg.text}</MessageContent>
-                    )}
-                  </Message>
-                ))}
-
-                {isAiResponding && (
-                  <Message from="assistant" className="mb-4">
-                    <MessageContent className="text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="animate-pulse">Thinking...</div>
+                  <Conversation className="flex-1 overflow-y-auto p-4">
+                    {messages.length === 0 && !isAiResponding && (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-sm text-muted-foreground text-center">
+                          Ask a question about the paper to start chatting.
+                        </p>
                       </div>
-                    </MessageContent>
-                  </Message>
-                )}
+                    )}
 
-                <div ref={messagesEndRef} />
-              </Conversation>
+                    {messages.map((msg, index) => (
+                      <Message
+                        key={index}
+                        from={msg.sender === 'user' ? 'user' : 'assistant'}
+                        className="mb-4"
+                      >
+                        {msg.sender === 'ai' ? (
+                          <MessageResponse className="text-sm">{msg.text}</MessageResponse>
+                        ) : (
+                          <MessageContent className="text-sm">{msg.text}</MessageContent>
+                        )}
+                      </Message>
+                    ))}
 
-              <div className="p-3 border-t">
-                <form onSubmit={handleChatSubmit} className="flex gap-2">
-                  <Textarea
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    disabled={isAiResponding || !conversationId}
-                    placeholder="Ask about this paper..."
-                    className="min-h-[60px] resize-none"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleChatSubmit(e);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="submit"
-                    disabled={!inputMessage.trim() || isAiResponding || !conversationId}
-                    size="icon"
-                    className="self-end"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="22" y1="2" x2="11" y2="13" />
-                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                    </svg>
-                  </Button>
-                </form>
-              </div>
+                    {isAiResponding && (
+                      <Message from="assistant" className="mb-4">
+                        <MessageContent className="text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="animate-pulse">Thinking...</div>
+                          </div>
+                        </MessageContent>
+                      </Message>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                  </Conversation>
+
+                  <div className="p-3 border-t">
+                    <form onSubmit={handleChatSubmit} className="flex gap-2">
+                      <Textarea
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        disabled={!isAuthed || isAiResponding || !conversationId}
+                        placeholder="Ask about this paper..."
+                        className="min-h-[60px] resize-none"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleChatSubmit(e);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="submit"
+                        disabled={!isAuthed || !inputMessage.trim() || isAiResponding || !conversationId}
+                        size="icon"
+                        className="self-end"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="22" y1="2" x2="11" y2="13" />
+                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                      </Button>
+                    </form>
+                  </div>
+                </>
+              )}
             </TabsContent>
 
             {/* Notes Tab */}
             <TabsContent value="notes" className="flex-1 flex flex-col mt-0 overflow-hidden">
-              <div className="p-3 border-b">
-                <h2 className="font-semibold">Private Notes</h2>
-                <p className="text-xs text-muted-foreground">Your notes are saved locally</p>
-              </div>
+              {!isAuthed ? (
+                <PleaseLogin feature="Notes" />
+              ) : (
+                <>
+                  <div className="p-3 border-b">
+                    <h2 className="font-semibold">Private Notes</h2>
+                    <p className="text-xs text-muted-foreground">Your notes are saved locally</p>
+                  </div>
 
-              <div className="flex-1 p-3">
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Take notes about this paper..."
-                  className="h-full resize-none"
-                />
-              </div>
+                  <div className="flex-1 p-3">
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Take notes about this paper..."
+                      className="h-full resize-none"
+                    />
+                  </div>
+                </>
+              )}
             </TabsContent>
 
             {/* Comments Tab */}
             <TabsContent value="comments" className="flex-1 flex flex-col mt-0 overflow-hidden">
-              <div className="p-3 border-b">
-                <h2 className="font-semibold">Community Comments</h2>
-                <p className="text-xs text-muted-foreground">Discuss this paper with others</p>
-              </div>
+              {!isAuthed ? (
+                <PleaseLogin feature="Comments" />
+              ) : (
+                <>
+                  <div className="p-3 border-b">
+                    <h2 className="font-semibold">Community Comments</h2>
+                    <p className="text-xs text-muted-foreground">Discuss this paper with others</p>
+                  </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-muted-foreground">Comments feature coming soon...</p>
-                </div>
-              </div>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-sm text-muted-foreground">Comments feature coming soon...</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </TabsContent>
 
             {/* Similar Papers Tab */}
             <TabsContent value="similar" className="flex-1 flex flex-col mt-0 overflow-hidden">
-              <div className="p-3 border-b">
-                <h2 className="font-semibold">Similar Papers</h2>
-                <p className="text-xs text-muted-foreground">Papers related to this one</p>
-              </div>
+              {!isAuthed ? (
+                <PleaseLogin feature="Similar papers" />
+              ) : (
+                <>
+                  <div className="p-3 border-b">
+                    <h2 className="font-semibold">Similar Papers</h2>
+                    <p className="text-xs text-muted-foreground">Papers related to this one</p>
+                  </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-muted-foreground">Similar papers feature coming soon...</p>
-                </div>
-              </div>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-sm text-muted-foreground">Similar papers feature coming soon...</p>
+                    </div>
+                  </div>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </ResizablePanel>

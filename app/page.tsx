@@ -6,6 +6,7 @@ import Typesense from 'typesense'; // Keep for initial load if preferred, or rem
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { useAuth } from '@/lib/auth-context';
 // Remove Firestore imports if still present
 // import { db } from '@/lib/firebaseConfig';
 // import { collection, getDocs, query, limit } from "firebase/firestore";
@@ -40,6 +41,7 @@ interface PaperHit { // Needed if using client-side Typesense directly
 
 
 export default function HomePage() {
+  const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [papers, setPapers] = useState<PaperDocument[]>([]); // State to hold papers
   const [isLoading, setIsLoading] = useState(true); // Loading state
@@ -120,12 +122,16 @@ export default function HomePage() {
             </Button>
           </form>
           <div className="flex items-center gap-2 whitespace-nowrap">
-            <Link href="/login">
-              <Button variant="outline" size="sm">Login</Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm">Register</Button>
-            </Link>
+            {!authLoading && !user && (
+              <>
+                <Link href="/login">
+                  <Button variant="outline" size="sm">Login</Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm">Register</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
