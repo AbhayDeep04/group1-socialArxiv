@@ -6,18 +6,18 @@ interface AnnotationLayerProps {
   pageNumber: number;
   notes: Note[];
   onHighlightClick?: (note: Note) => void;
+  activeCitation?: {
+    pageNumber: number;
+    bbox: { x: number; y: number; width: number; height: number };
+  } | null;
 }
 
-export function AnnotationLayer({ pageNumber, notes, onHighlightClick }: AnnotationLayerProps) {
+export function AnnotationLayer({ pageNumber, notes, onHighlightClick, activeCitation }: AnnotationLayerProps) {
   const pageAnnotations = notes.filter(
     (note) =>
       note.type === 'annotation' &&
       note.annotation?.pageRects?.some((rect) => rect.pageNumber === pageNumber)
   );
-
-  if (pageAnnotations.length === 0) {
-    return null;
-  }
 
   return (
     <>
@@ -40,6 +40,19 @@ export function AnnotationLayer({ pageNumber, notes, onHighlightClick }: Annotat
           />
         ));
       })}
+      
+      {/* Active Citation Highlight */}
+      {activeCitation && activeCitation.pageNumber === pageNumber && (
+        <div
+          className="absolute border-2 border-yellow-500 bg-yellow-200/30 rounded-sm pointer-events-none z-50 animate-in fade-in duration-300"
+          style={{
+            left: `${activeCitation.bbox.x * 100}%`,
+            top: `${activeCitation.bbox.y * 100}%`,
+            width: `${activeCitation.bbox.width * 100}%`,
+            height: `${activeCitation.bbox.height * 100}%`,
+          }}
+        />
+      )}
     </>
   );
 }

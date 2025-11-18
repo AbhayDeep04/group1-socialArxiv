@@ -18,7 +18,7 @@ import { Message, MessageContent, MessageResponse } from '@/components/ai-elemen
 import { Textarea } from '@/components/ui/textarea';
 
 import { ChatMessage, Source } from '@/lib/types';
-import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark, Star, ExternalLink } from 'lucide-react';
+import { ZoomIn, ZoomOut, Plus, MessageSquare, History, Sparkles, Headphones, Save, X, Bookmark, Star, ExternalLink, BookOpen } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -49,6 +49,8 @@ import {
 } from '@/components/ui/audio-player';
 import { subscribeToUserRating, submitRating } from '@/lib/db/ratings';
 import { RatingPopover } from '@/components/ratings/RatingPopover';
+import { ingestPaper } from '@/app/actions/ingest';
+import { Loader2 } from 'lucide-react';
 
 const PDFViewer = dynamic(() => import('@/components/pdf/Viewer'), { ssr: false });
 
@@ -79,11 +81,21 @@ export default function PaperPage() {
   const { user, loading: authLoading } = useAuth();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const isAuthed = !!user && !authLoading;
+  const [isAuthed, setIsAuthed] = useState(false);
+  useEffect(() => { setIsAuthed(!!user && !authLoading) }, [user, authLoading]);
 
   const [metadata, setMetadata] = useState<PaperMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Ingestion State
+  const [ingestStatus, setIngestStatus] = useState<'idle' | 'ingesting' | 'ready' | 'error'>('idle');
+
+  // Active citation highlight
+  const [activeCitation, setActiveCitation] = useState<{
+    pageNumber: number;
+    bbox: { x: number; y: number; width: number; height: number };
+  } | null>(null);
 
   // PDF Viewer State
   const [numPages, setNumPages] = useState<number | null>(null);
@@ -185,32 +197,55 @@ export default function PaperPage() {
     fetchMetadata();
   }, [paperId]);
 
-  // Trigger hydration once metadata loads (don't await - fire and forget)
+  // Trigger Reducto Ingestion
   useEffect(() => {
-    if (!paperId || !metadata || hydrationSentRef.current) return;
-    hydrationSentRef.current = true;
-
-    const pdfUrlForHydration =
-      metadata.pdfUrl && metadata.pdfUrl.startsWith('http') ? metadata.pdfUrl : undefined;
-
-    // Fire and forget - hydration runs in background
-    fetch(`/api/papers/${paperId}/hydrate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdfUrl: pdfUrlForHydration }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && !data.cached) {
-          console.log(`Hydration started for ${paperId}, will complete in ~10-20 seconds`);
-        } else if (data.cached) {
-          console.log(`Paper ${paperId} already hydrated`);
+    if (!paperId || ingestStatus !== 'idle') return;
+    
+    setIngestStatus('ingesting');
+    console.log(`[Frontend] Triggering ingestion for ${paperId}`);
+    
+    ingestPaper(paperId)
+      .then(result => {
+        if (result.success) {
+          console.log('[Frontend] Ingestion ready');
+          setIngestStatus('ready');
+        } else {
+          console.warn('[Frontend] Ingestion failed', result.message);
+          setIngestStatus('error');
         }
       })
-      .catch((err) => {
-        console.warn('Hydration trigger failed:', err);
+      .catch(err => {
+        console.error('[Frontend] Ingestion error', err);
+        setIngestStatus('error');
       });
-  }, [paperId, metadata]);
+  }, [paperId, ingestStatus]);
+
+  // Trigger hydration once metadata loads (don't await - fire and forget)
+  // useEffect(() => {
+  //   if (!paperId || !metadata || hydrationSentRef.current) return;
+  //   hydrationSentRef.current = true;
+
+  //   const pdfUrlForHydration =
+  //     metadata.pdfUrl && metadata.pdfUrl.startsWith('http') ? metadata.pdfUrl : undefined;
+
+  //   // Fire and forget - hydration runs in background
+  //   fetch(`/api/papers/${paperId}/hydrate`, {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({ pdfUrl: pdfUrlForHydration }),
+  //   })
+  //     .then(res => res.json())
+  //     .then(data => {
+  //       if (data.success && !data.cached) {
+  //         console.log(`Hydration started for ${paperId}, will complete in ~10-20 seconds`);
+  //       } else if (data.cached) {
+  //         console.log(`Paper ${paperId} already hydrated`);
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       console.warn('Hydration trigger failed:', err);
+  //     });
+  // }, [paperId, metadata]);
 
   // Subscribe to bookmark state
   useEffect(() => {
@@ -514,6 +549,7 @@ export default function PaperPage() {
       const aiResponse: ChatMessage = {
         sender: 'ai',
         text: aiResponseText,
+        sources: responseData.sources,
       };
       setMessages((prev) => [...prev, aiResponse]);
     } catch (e: any) {
@@ -810,6 +846,7 @@ export default function PaperPage() {
                     notes={allNotes}
                     onHighlightClick={handleHighlightClick}
                     onTextSelected={isAuthed ? handleTextSelected : undefined}
+                    activeCitation={activeCitation}
                   />
                 </div>
               )}
@@ -838,7 +875,15 @@ export default function PaperPage() {
                 <>
                   <div className="p-3 border-b flex items-center justify-between">
                     <div>
-                      <h2 className="font-semibold">AI Assistant</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-semibold">AI Assistant</h2>
+                        {ingestStatus === 'ingesting' && (
+                          <span className="flex items-center text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full animate-pulse">
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Reading paper...
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">Ask questions about this paper</p>
                     </div>
                     <div className="flex gap-2">
@@ -909,7 +954,54 @@ export default function PaperPage() {
                         className="mb-4"
                       >
                         {msg.sender === 'ai' ? (
-                          <MessageResponse className="text-sm">{msg.text}</MessageResponse>
+                          <>
+                            <MessageResponse className="text-sm">{msg.text}</MessageResponse>
+                            {msg.sources && msg.sources.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {msg.sources
+                                  .filter(source => {
+                                    // Only show sources that are explicitly cited in the text response
+                                    // Look for patterns like [1], [2], etc.
+                                    const citationPattern = new RegExp(`\\[${source.index}\\]`, 'g');
+                                    return citationPattern.test(msg.text);
+                                  })
+                                  .map((source, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      if (source.pageNumber && source.bbox) {
+                                        const rawBbox = typeof source.bbox === 'string' ? JSON.parse(source.bbox) : source.bbox;
+                                        // Normalize Reducto (left, top) to our system (x, y)
+                                        const bbox = {
+                                          x: rawBbox.x ?? rawBbox.left ?? 0,
+                                          y: rawBbox.y ?? rawBbox.top ?? 0,
+                                          width: rawBbox.width ?? 0,
+                                          height: rawBbox.height ?? 0
+                                        };
+                                        
+                                        setActiveCitation({
+                                          pageNumber: source.pageNumber,
+                                          bbox: bbox
+                                        });
+                                        
+                                        // Auto scroll to page
+                                        const pageElement = document.querySelector(`[data-page-number="${source.pageNumber}"]`);
+                                        pageElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        
+                                        // Clear highlight after 4 seconds
+                                        setTimeout(() => setActiveCitation(null), 4000);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
+                                    title={source.text}
+                                  >
+                                    <BookOpen className="h-3 w-3" />
+                                    p.{source.pageNumber}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         ) : (
                           <MessageContent className="text-sm">{msg.text}</MessageContent>
                         )}

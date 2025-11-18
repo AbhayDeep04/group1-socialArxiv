@@ -5,7 +5,8 @@ export interface Source {
   chunkIndex: number;
   score: number;
   text: string;
-  pageNumber?: number; // For future PDF page citation feature
+  pageNumber?: number;
+  bbox?: string; // JSON string of [x, y, w, h]
 }
 
 export interface Message {

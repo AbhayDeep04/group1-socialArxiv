@@ -21,6 +21,10 @@ interface Props {
   onLoadError: (err: any) => void;
   notes?: Note[];
   onHighlightClick?: (note: Note) => void;
+  activeCitation?: {
+    pageNumber: number;
+    bbox: { x: number; y: number; width: number; height: number };
+  } | null;
   onTextSelected?: (selection: {
     text: string;
     pageNumber: number;
@@ -38,6 +42,7 @@ export default function PDFViewer({
   onLoadError,
   notes = [],
   onHighlightClick,
+  activeCitation,
   onTextSelected,
 }: Props) {
   const handleMouseUp = (pageNumber: number, event: React.MouseEvent<HTMLDivElement>) => {
@@ -103,6 +108,7 @@ export default function PDFViewer({
                   pageNumber={pageNumber}
                   notes={notes}
                   onHighlightClick={onHighlightClick}
+                  activeCitation={activeCitation}
                 />
               </div>
             </div>
