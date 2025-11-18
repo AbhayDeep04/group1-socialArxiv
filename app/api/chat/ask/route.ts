@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // --- Configuration ---
-const qdrantCollectionName = 'paper_semantics';
+const qdrantCollectionName = 'paper_chunks';
 
 // --- Initialize Clients ---
 const qdrantClient = new QdrantClient({
@@ -132,7 +132,10 @@ export async function POST(request: NextRequest) {
 
     // --- Step 5: Build context and sources from top matches ---
     const paperContext = hits
-      .map((h: any) => h?.payload?.chunkText || '')
+      .map((h: any, i: number) => {
+        const text = h?.payload?.text || h?.payload?.chunkText || '';
+        return `[${i + 1}] ${text}`;
+      })
       .filter(Boolean)
       .join('\n\n');
 
@@ -140,9 +143,11 @@ export async function POST(request: NextRequest) {
 
     const sources: Source[] = hits.map((h: any, i: number) => ({
       index: i + 1,
-      chunkIndex: h?.payload?.chunkIndex ?? 0,
+      chunkIndex: i, // fallback as we generate sequential IDs
       score: h?.score ?? 0,
-      text: (h?.payload?.chunkText || '').slice(0, 500),
+      text: (h?.payload?.text || h?.payload?.chunkText || '').slice(0, 500),
+      pageNumber: h?.payload?.page_number ?? null,
+      bbox: h?.payload?.bbox ?? null
     }));
 
     // --- Step 6: Build conversation history string ---
@@ -153,8 +158,12 @@ export async function POST(request: NextRequest) {
 
     // --- Step 7: Construct LLM prompt ---
     const prompt = `You are a helpful research assistant. Answer the user's question based on the research paper provided below.
+You have access to specific chunks of the paper, labeled with numbers like [1], [2], etc.
+Prioritize the provided paper context for your answer.
+ALWAYS cite your sources using the bracket numbers at the end of relevant sentences or paragraphs derived from the paper (e.g. "The model uses attention mechanisms [1].").
+If the context does not contain the answer (e.g. for code implementations or general explanations), use your general knowledge to provide a helpful response.
 
-${historyString ? `Previous conversation:\n${historyString}\n\n` : ''}Research Paper:
+${historyString ? `Previous conversation:\n${historyString}\n\n` : ''}Research Paper Context:
 ---
 ${paperContext}
 ---
