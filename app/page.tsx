@@ -150,13 +150,21 @@ export default function HomePage() {
             <Input
               type="search"
               placeholder="Search papers..."
-              className="w-full rounded-lg bg-background pl-8"
+              className="w-full rounded-lg bg-background pl-18"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={isSearching}
             />
             <Button type="submit" size="sm" className="absolute right-0 top-0 h-full rounded-l-none" disabled={isSearching}>
               {isSearching ? 'Searching...' : 'Search'}
+            </Button>
+            <Button type="button" size="sm" className="absolute left-0 top-0 h-full rounded-r-none"
+                    onClick={() => {
+                      setSearchTerm('');
+                      fetchPapers(); // Fetch initial papers again
+                    }}
+                    disabled={isSearching || !searchTerm.trim()}>
+              Clear
             </Button>
           </form>
           <div className="flex items-center gap-2 whitespace-nowrap">
