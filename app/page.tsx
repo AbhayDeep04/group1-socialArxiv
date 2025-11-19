@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import Typesense from 'typesense'; // Keep for initial load if preferred, or remove if search handles all
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -139,7 +140,12 @@ export default function HomePage() {
     <div className="flex flex-col min-h-screen">
       <header className="sticky top-0 z-10 border-b bg-background px-4 py-2 sm:px-6">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-xl font-semibold whitespace-nowrap">Social arXiv Demo</h1>
+          <Image
+          src="/CSPlogo.png"
+          alt='Social arXiv logo'
+          width={80}
+          height={80}
+          className='object-contain' />
           <form onSubmit={handleSearch} className="relative flex-1 max-w-xl">
             <Input
               type="search"
