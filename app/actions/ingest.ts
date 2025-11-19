@@ -4,7 +4,9 @@ import { getReductoClient } from '@/lib/reducto-server';
 import { fileFromPath } from 'reductoai';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { generateEmbeddings } from '@/lib/embeddings-server';
+import { getAdminDb, getAdminStorage } from '@/lib/firebaseAdmin';
 import { 
   getQdrantClient, 
   upsertPoints, 
@@ -26,6 +28,8 @@ export interface IngestResult {
 }
 
 export async function ingestPaper(paperId: string): Promise<IngestResult> {
+  let tempFilePath: string | null = null;
+
   try {
     console.log(`[Ingest] Starting ingestion check for ${paperId}`);
     
@@ -48,9 +52,45 @@ export async function ingestPaper(paperId: string): Promise<IngestResult> {
     const reducto = getReductoClient();
     let input: string | any = '';
 
+    // Check Firestore for User Upload
+    let storagePath: string | undefined;
+    try {
+      const db = getAdminDb();
+      const docSnap = await db.collection('papers').doc(paperId).get();
+      if (docSnap.exists) {
+        storagePath = docSnap.data()?.storagePath;
+      }
+    } catch (err) {
+      console.warn('[Ingest] Error checking Firestore:', err);
+    }
+
     // Check for local legacy file
     const localPath = path.join(process.cwd(), 'public', 'pdfs', `${paperId}.pdf`);
-    if (fs.existsSync(localPath)) {
+
+    if (storagePath) {
+      console.log(`[Ingest] Found uploaded file in storage: ${storagePath}`);
+      
+      // Download from Firebase Storage to temp file
+      const storage = getAdminStorage();
+      const bucket = storage.bucket();
+      const file = bucket.file(storagePath);
+      
+      // Create temp file path
+      tempFilePath = path.join(os.tmpdir(), `${paperId}-${Date.now()}.pdf`);
+      
+      await file.download({ destination: tempFilePath });
+      console.log(`[Ingest] Downloaded to temp file: ${tempFilePath}`);
+      
+      const fileObj = await fileFromPath(tempFilePath);
+      const upload = await reducto.upload({
+        extension: 'pdf',
+        file: fileObj
+      });
+      
+      input = `reducto://${upload.file_id}`;
+      console.log(`[Ingest] Uploaded storage file to Reducto. ID: ${input}`);
+
+    } else if (fs.existsSync(localPath)) {
       console.log(`[Ingest] Found local file for ${paperId}, uploading to Reducto...`);
       const file = await fileFromPath(localPath);
       const upload = await reducto.upload({
@@ -195,5 +235,15 @@ export async function ingestPaper(paperId: string): Promise<IngestResult> {
       status: 'error', 
       message: error.message 
     };
+  } finally {
+    // Clean up temp file
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+        console.log(`[Ingest] Cleaned up temp file: ${tempFilePath}`);
+      } catch (err) {
+        console.warn(`[Ingest] Failed to clean up temp file: ${tempFilePath}`, err);
+      }
+    }
   }
 }
