@@ -146,7 +146,7 @@ export function SidebarNav() {
               </TooltipTrigger>
               <TooltipContent side="right">Toggle theme</TooltipContent>
             </Tooltip>
-
+            {!authLoading && user && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -161,6 +161,7 @@ export function SidebarNav() {
               </TooltipTrigger>
               <TooltipContent side="right">Sign Out</TooltipContent>
             </Tooltip>
+            )}
           </div>
         </nav>
       </TooltipProvider>
