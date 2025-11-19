@@ -131,39 +131,37 @@ export function SidebarNav() {
 
           <UploadPaperDialog />
 
-          {!authLoading && user && (
-            <div className="flex flex-col items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-lg"
-                    onClick={() => setTheme(isDark ? "light" : "dark")}
-                  >
-                    {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    <span className="sr-only">Toggle theme</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Toggle theme</TooltipContent>
-              </Tooltip>
+          <div className="flex flex-col items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-lg"
+                  onClick={() => setTheme(isDark ? "light" : "dark")}
+                >
+                  {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Toggle theme</TooltipContent>
+            </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-lg"
-                    onClick={handleSignOut}
-                  >
-                    <LogOut className="h-5 w-5" />
-                    <span className="sr-only">Sign Out</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Sign Out</TooltipContent>
-              </Tooltip>
-            </div>
-          )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-lg"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="h-5 w-5" />
+                  <span className="sr-only">Sign Out</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Sign Out</TooltipContent>
+            </Tooltip>
+          </div>
         </nav>
       </TooltipProvider>
     </aside>
