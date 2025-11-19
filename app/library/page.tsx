@@ -174,7 +174,7 @@ export default function LibraryPage() {
             </div>
           </div>
           
-          {paper.authors.length > 0 && (
+          {paper.authors?.length > 0 && (
             <p className="text-sm text-muted-foreground mb-2">
               {paper.authors.join(", ")}
             </p>
@@ -189,7 +189,7 @@ export default function LibraryPage() {
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             {paper.year && <span>{paper.year}</span>}
             {paper.venue && <span>{paper.venue}</span>}
-            {paper.tags.length > 0 && (
+            {paper.tags?.length > 0 && (
               <div className="flex gap-1">
                 {paper.tags.slice(0, 3).map((tag) => (
                   <span key={tag} className="px-2 py-0.5 bg-secondary rounded-full">

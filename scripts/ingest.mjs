@@ -8,6 +8,8 @@ import { PdfReader } from 'pdfreader';
 import { fileURLToPath } from 'url';
 import { v5 as uuidv5 } from 'uuid';
 import OpenAI from 'openai';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 // --- Configuration ---
 // Get __dirname equivalent in ES module
@@ -25,6 +27,25 @@ const qdrantCollectionName = 'paper_chunks';
 const embeddingModel = 'text-embedding-3-small';
 const chunkSize = 500;
 const chunkOverlap = 50;
+
+// --- Initialize Firebase Admin ---
+if (getApps().length === 0) {
+    const serviceAccount = {
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'social-arxiv-demo-63c41',
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    };
+
+    if (!serviceAccount.clientEmail || !serviceAccount.privateKey) {
+      console.error('Error: FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY is missing in .env.local');
+      process.exit(1);
+    }
+
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+}
+const db = getFirestore();
 
 // --- Initialize Clients ---
 const typesenseClient = new Typesense.Client({
@@ -226,6 +247,34 @@ async function ingestData() {
         } catch (error) {
             console.error(` -> Error upserting metadata to Typesense for ${paperId}:`, error);
             continue;
+        }
+
+        // 4a.2 Add metadata to Firestore
+        try {
+            const firestoreData = {
+                id: metadata.id,
+                source: metadata.source,
+                ownerId: "system",
+                visibility: "public",
+                title: metadata.title,
+                authors: metadata.authors,
+                abstract: metadata.abstract,
+                year: metadata.year,
+                venue: "ArXiv", // Default or from metadata
+                tags: metadata.categories,
+                status: "ready",
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+                url: metadata.pdfUrl,
+                pageCount: null,
+                chunkCount: null, // Will be updated later?
+            };
+            
+            await db.collection('papers').doc(paperId).set(firestoreData, { merge: true });
+            console.log(` -> Upserted metadata to Firestore for ${paperId}`);
+        } catch (error) {
+            console.error(` -> Error upserting metadata to Firestore for ${paperId}:`, error);
+            // We continue even if Firestore fails, but logging it is important
         }
 
         // 4b. Extract text, chunk, embed, prepare for Qdrant

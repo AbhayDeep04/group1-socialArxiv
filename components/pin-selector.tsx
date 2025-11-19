@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getBookmarkedPaperIds } from '@/lib/firestore/bookmarks';
 import { updatePinnedPapers } from '@/lib/profile';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,7 +28,7 @@ export function PinSelector({ userId, currentPins }: PinSelectorProps) {
         
         if (paperIds.length > 0) {
           const papersRef = collection(db, 'papers');
-          const q = query(papersRef, where('__name__', 'in', paperIds.slice(0, 10)));
+          const q = query(papersRef, where(documentId(), 'in', paperIds.slice(0, 10)));
           const snapshot = await getDocs(q);
           const papers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Paper));
           setBookmarkedPapers(papers);

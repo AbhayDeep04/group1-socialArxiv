@@ -19,7 +19,7 @@ import { MapPin, Building2, Users, UserCheck, Edit } from 'lucide-react';
 import type { UserProfile } from '@/lib/types/profile';
 import type { Paper } from '@/lib/types/paper';
 import Link from 'next/link';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 
 export default function ProfilePage({
@@ -45,7 +45,7 @@ export default function ProfilePage({
 
         if (profileData?.pinnedPaperIds && profileData.pinnedPaperIds.length > 0) {
           const papersRef = collection(db, 'papers');
-          const q = query(papersRef, where('__name__', 'in', profileData.pinnedPaperIds));
+          const q = query(papersRef, where(documentId(), 'in', profileData.pinnedPaperIds));
           const snapshot = await getDocs(q);
           const papers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Paper));
           setPinnedPapers(papers);

@@ -11,7 +11,8 @@ import {
   getDocs,
   Timestamp,
   serverTimestamp,
-  collectionGroup
+  collectionGroup,
+  documentId
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { Paper, CreatePaperData } from "@/lib/types/paper";
@@ -65,34 +66,40 @@ export async function getUserPapers(userId: string, limitCount = 50): Promise<Pa
   );
   
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  } as Paper));
+  return snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      tags: data.tags || [],
+      authors: data.authors || [],
+    } as Paper;
+  });
 }
 
 async function fetchPapersByIds(paperIds: string[]): Promise<Paper[]> {
   if (paperIds.length === 0) return [];
   
-  const papers: Paper[] = [];
-  const chunkSize = 10;
-  
-  for (let i = 0; i < paperIds.length; i += chunkSize) {
-    const chunk = paperIds.slice(i, i + chunkSize);
-    const q = query(
-      collection(db, PAPERS_COLLECTION),
-      where("__name__", "in", chunk)
-    );
-    const snapshot = await getDocs(q);
-    snapshot.docs.forEach(doc => {
-      papers.push({
-        id: doc.id,
-        ...doc.data(),
-      } as Paper);
-    });
-  }
-  
-  return papers;
+  const promises = paperIds.map(async (id) => {
+    try {
+      const docRef = doc(db, PAPERS_COLLECTION, id);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      return {
+        id: snap.id,
+        ...data,
+        tags: data.tags || [],
+        authors: data.authors || [],
+      } as Paper;
+    } catch (err) {
+      console.warn(`Skipping paper ${id} due to error:`, err);
+      return null;
+    }
+  });
+
+  const results = await Promise.all(promises);
+  return results.filter((p): p is Paper => p !== null);
 }
 
 export async function getPapersWithUserNotes(userId: string, limitCount = 50): Promise<Paper[]> {
