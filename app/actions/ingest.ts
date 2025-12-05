@@ -18,7 +18,7 @@ import {
   QdrantPayload
 } from '@/lib/qdrant-server';
 
-const COLLECTION_NAME = 'paper_chunks';
+const COLLECTION_NAME = 'paper_semantics';
 
 export interface IngestResult {
   success: boolean;

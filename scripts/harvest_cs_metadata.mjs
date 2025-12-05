@@ -14,6 +14,7 @@ import https from 'https';
 import http from 'http';
 import { parseString } from 'xml2js';
 import { promisify } from 'util';
+import { v5 as uuidv5 } from 'uuid'; // <--- ADDED THIS IMPORT
 
 const parseXML = promisify(parseString);
 
@@ -27,6 +28,8 @@ const typesenseCollectionName = 'papers';
 const qdrantCollectionName = 'paper_semantics';
 const embeddingModel = 'text-embedding-3-small';
 const CHECKPOINT_FILE = path.join(__dirname, 'harvest_checkpoint.json');
+// <--- ADDED NAMESPACE CONSTANT (Same as ingest.mjs for consistency)
+const QDRANT_UUID_NAMESPACE = '1b671a64-40d5-491e-99b0-da01ff1f3341'; 
 
 // --- Initialize Clients ---
 const typesenseClient = new Typesense.Client({
@@ -232,8 +235,11 @@ async function processEmbeddingBatch(embedBatch, qdrantBatch) {
             const { paperId, metadata } = embedBatch[i];
             const embedding = response.data[i].embedding;
 
+            // <--- FIXED: GENERATE VALID UUID FOR QDRANT ID --->
+            const pointId = uuidv5(`${paperId}-abstract`, QDRANT_UUID_NAMESPACE);
+
             qdrantBatch.push({
-                id: `${paperId}-abstract`,
+                id: pointId, // Using UUID now
                 vector: embedding,
                 payload: {
                     paperId: paperId,
@@ -274,8 +280,7 @@ async function flushQdrantBatch(batch) {
         console.error('Batch size:', batch.length);
         console.error('First point ID:', batch[0]?.id);
         console.error('Vector dimension:', batch[0]?.vector?.length);
-        // Don't log full sample to avoid spam
-        process.exit(1); // Stop on first error to debug
+        process.exit(1); 
     }
 }
 

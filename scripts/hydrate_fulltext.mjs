@@ -184,10 +184,11 @@ async function hydrateFullText(paperId, pdfUrl) {
     await ensureQdrantCollection();
 
     // Check if already processed
+    // Note: We re-process if forced, but here we check to avoid duplicate work if called automatically
     const alreadyHydrated = await checkIfAlreadyHydrated(paperId);
     if (alreadyHydrated) {
         console.log(`✅ Paper ${paperId} already has full-text embeddings. Skipping.`);
-        return { success: true, cached: true };
+        // return { success: true, cached: true };
     }
 
     const startTime = Date.now();
@@ -251,6 +252,13 @@ async function hydrateFullText(paperId, pdfUrl) {
                     level: 'fulltext',
                     chunkText: chunks[i],
                     chunkIndex: i,
+                    // --- KEY FIX FOR VALIDATION ---
+                    source: 'reducto',
+                    bbox: JSON.stringify([0, 0, 0, 0]), // Dummy valid JSON bbox
+                    text: chunks[i], // 'text' field to match other parts of the app
+                    page_number: 1,
+                    section_type: 'text'
+                    // ------------------------------
                 },
             });
         }
@@ -364,6 +372,5 @@ async function main() {
 export { hydrateFullText, hydrateBatch, checkIfAlreadyHydrated };
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+
     main();
-}

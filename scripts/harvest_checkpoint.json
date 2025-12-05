@@ -1,5 +1,5 @@
 {
-  "lastProcessedDate": "2025-11-17",
-  "resumptionToken": "verb%3DListRecords%26metadataPrefix%3DarXiv%26from%3D2024-04-10%26set%3Dcs%26skip%3D89",
-  "processedCount": 31500
+  "lastProcessedDate": "2025-12-05",
+  "resumptionToken": "verb%3DListRecords%26metadataPrefix%3DarXiv%26from%3D2024-04-22%26set%3Dcs%26skip%3D167",
+  "processedCount": 35000
 }
